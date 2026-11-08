@@ -60,13 +60,13 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
 ### AIの選び方（作るAI・モデル・考える深さ）
 
 - **設定で1回決める**：設定画面で「作るAI」（Claude Code／Codex）・モデル・考える深さを決める。入力画面には小さな札で表示するだけで、押すとその依頼だけ変えられる（2026-11-08 ユーザー判断 1A）
-- **レビューはもう一方のAI**：詳細版のレビューは、作るAIでない方が自動で担当する。片方しか使えない時は同じAIがレビューし「別のAIのレビューは未実施」と結果に書く
+- **検査は作ったAI、レビューは常に Codex**：自己検査（見出しの文型・はみ出し・重なり・最小文字・空白・数字の出所・試作でつまずいた3点。満たせない項目は「未達」）は作ったAIが行う。詳細版のレビューは、作ったAIに関係なく **Codex を新しく起動して**行う（Claude Code で作った時も Codex で作った時も同じ。会話は引き継がず、ファイルを read-only で読む。観点は見出し・数値・証拠・型と構図・規準、結果は総合判定＋指摘一覧）。指摘は作ったAIが1周で直し、直した後の画像を確かめる。Codex が使えない時だけ Claude Code を新しく起動してレビューし「Codexレビュー未実施」と結果に書く。簡易版はレビューなし（2026-11-08 ユーザー判断 1B 2A）
 - **品質の下限**（下限より下は選択肢に出さない。2026-11-08 ユーザー判断 2A）：
 
 | | 作る | レビュー（詳細版） |
 |---|---|---|
-| Claude Code | モデル opus 以上（opus／fable）、考える深さ medium 以上 | 同じ |
-| Codex | モデル sol 系（gpt-6.1-sol／gpt-5.6-sol）、考える深さ medium 以上 | sol 系、high 以上（slide-studio の手順どおり） |
+| Claude Code | モデル opus 以上（opus／fable）、考える深さ medium 以上 | Codex が使えない時だけ：opus 以上、high 以上 |
+| Codex | モデル sol 系（gpt-6.1-sol／gpt-5.6-sol）、考える深さ medium 以上 | 常にこちら：sol 系、high 以上（slide-studio の手順どおり） |
 
 - **考える深さはレベルで自動**：簡易版＝medium、詳細版＝high（AUTOは選ばれた版に従う）。変える時は下限より上だけ選べる
 - 選べる段階：Claude Code＝medium・high・xhigh・max（`--effort`）／Codex＝medium・high・xhigh・max・ultra（`-c model_reasoning_effort=`）。モデルは Claude が `--model`、Codex が `-m`
@@ -136,7 +136,7 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
   - Codex：`codex exec -m <モデル> "<指示>"`（作業フォルダ内の書き込みだけ許す sandbox）
 - 指示の中身：slide-studio の段取りファイル（`prompts/ROUTER.md` から必要な物だけ）＋画面の選択から組み立てた依頼文5行（何を・読み手・目的・素材・出力）＋版・配色の行。段取りは slide-studio の取り決めを変えない
 - 段階ごとに起動を分ける：①質問の要否と設計図 →（詳細版はOK待ち）→ ②本番と自己検査 → ③レビュー → ④手直し。各段階の結果はファイルで受け渡す
-- レビュー（詳細版）は Codex で行う（slide-studio どおり）。Codexが無い時は、選んだAIでレビューし「Codexレビュー未実施」と結果に書く
+- レビュー（詳細版）は作ったAIに関係なく Codex を新しく起動して行う（4章「AIの選び方」）。Codex が無い時は Claude Code でレビューし「Codexレビュー未実施」と結果に書く
 - 段取りファイルの置き場所は設定で指す：既定は slide-studio のフォルダ。原文プロンプト（`prompts/_source/`）も同じく設定で指す
 - 進行はCLIの出力を流して画面に出す。失敗・中断はログを残し、その段階からやり直せる
 - **サブスク専用**：各CLIのサブスクのログイン（Claude Code＝claude.ai の Pro／Max、Codex＝ChatGPT の Plus／Pro）で動かす。APIキーの入力欄は作らず、CLIを起動する時に `ANTHROPIC_API_KEY`・`OPENAI_API_KEY` などAPIキーの環境変数を外す（従量課金に切り替わらないため）。自前でAIと通信する部品（SDK＋サブスクのログイン流用）は作らない
