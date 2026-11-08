@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "neo-fake",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEO_FAKE_AI=1&& npm run dev -- --port 3100"],
+      "port": 3100
+    }
+  ]
+}
