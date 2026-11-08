@@ -1,6 +1,6 @@
 # 要件定義 — SLIDE STUDIO NEO
 
-- 版：v0.1（案）／状態：**ユーザー承認待ち**
+- 版：v1.0／状態：**2026-11-08 ユーザー承認済み**
 - 画面案（実装前の確認用モック。TOP 1ページで状態が切り替わる v2）は [mockup/index.html](mockup/index.html)
 - 決定の経緯は [DECISIONS.md](../DECISIONS.md)、初期要望は [INITIAL_REQUEST.md](INITIAL_REQUEST.md)、参考UIは `references/ui/`
 - 段取りの正本は姉妹Project slide-studio（`C:\Dev\AI_Workspace\01_Projects\Active\slide-studio`）。このツールはその段取りを画面から動かす入れ物で、段取りの中身は変えない
