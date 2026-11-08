@@ -35,8 +35,8 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
 | 項目 | 選択肢 | 既定 | 選んだ時の挙動（AIへの渡し方） |
 |---|---|---|---|
 | AI | Claude Code／Codex | 前回の選択（初回は入っている方） | 呼ぶCLIを切り替える。入っていないCLIは押せない状態で「未インストール」と出す |
-| AIモデル | AIごとの候補＋「CLIの既定」。Claude Code＝fable・opus・sonnet、Codex＝CLIで動作を確かめた候補 | CLIの既定 | Claude は `--model`、Codex は `-m` で渡す。候補は設定ファイルで足し引きできる。プランで使えないモデルはエラーをそのまま画面に出す |
-| 考える深さ（エフォート） | Claude Code＝low・medium・high・xhigh・max／Codex＝low・medium・high 等 | medium | Claude は `--effort`、Codex は `-c model_reasoning_effort=` で渡す。両AIとも選べる（Claude Code 2.1.319 の `--help` で `--effort` を確認、2026-11-08） |
+| AIモデル | AIごとの候補＋「CLIの既定」。Claude Code＝fable・opus・sonnet、Codex＝gpt-6.1-sol・gpt-5.6-sol など（Codex CLI がアカウントから取得する一覧 `~/.codex/models_cache.json` の表示対象から出す） | CLIの既定 | Claude は `--model`、Codex は `-m` で渡す。候補は設定ファイルで足し引きできる。プランで使えないモデルはエラーをそのまま画面に出す |
+| 考える深さ（エフォート） | Claude Code＝low・medium・high・xhigh・max／Codex＝モデルごとの対応段階（gpt-6.1-sol・gpt-5.6-sol は low〜max＋ultra の6段階） | medium | Claude は `--effort`、Codex は `-c model_reasoning_effort=` で渡す。両AIとも選べる（2026-11-08 確認：Claude Code 2.1.319 の `--help` に `--effort`。codex-cli 0.167.0 で `-m gpt-6.1-sol`／`-m gpt-5.6-sol` ＋ `model_reasoning_effort=low` を、APIキーの環境変数を外し ChatGPT ログインで実行して応答を確認） |
 | 読み手 | 社内／社外 | 社内 | 依頼文の「読み手」に入れる。社外は敬体・出所の厳しさを上げる（slide-studio の社内・社外の扱い） |
 | 目的（スライドの種類） | 提案／報告／会議まとめ／説明・研修 | 提案 | 依頼文の「目的」と骨組みの指示を種類ごとに変える（下表） |
 | 出力形式 | pptx／html（両方も可） | pptx | 依頼文の「出力」に入れる。pptx＝静止版（編集できるpptx）、html＝動く版（HTML 1ファイル） |
@@ -92,7 +92,7 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
 - 段取りファイルの置き場所は設定で指す：既定は slide-studio のフォルダ。原文プロンプト（`prompts/_source/`）も同じく設定で指す
 - 進行はCLIの出力を流して画面に出す。失敗・中断はログを残し、その段階からやり直せる
 - **サブスク専用**：各CLIのサブスクのログイン（Claude Code＝claude.ai の Pro／Max、Codex＝ChatGPT の Plus／Pro）で動かす。APIキーの入力欄は作らず、CLIを起動する時に `ANTHROPIC_API_KEY`・`OPENAI_API_KEY` などAPIキーの環境変数を外す（従量課金に切り替わらないため）。自前でAIと通信する部品（SDK＋サブスクのログイン流用）は作らない
-- 作成前に各CLIの有無とログイン状態を確かめ、画面に表示する（調べるコマンドは実装時に確認）。使えないAIは選べず、ログイン手順を1行添える
+- 作成前に各CLIの有無とログイン状態を確かめ、画面に表示する（Codex は `codex login status` で「Logged in using ChatGPT」を確認済み。Claude Code のコマンドは実装時に確認）。使えないAIは選べず、ログイン手順を1行添える
 - **利用上限に達した時**：その段階で止め、成果物を残したまま「もう一方のAIで続ける」ボタンを出す。自動では切り替えない
 - 使う前提：利用者が各CLIを入れ、サブスクでログイン済みであること
 
@@ -126,6 +126,6 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
 
 ## 9. 未決（作りながら決める）
 
-- AIモデルの候補の初期値（CLIで実際に使えるモデル名を実装時に確かめる。slide-studio の記録では Codex CLI で gpt-6.1-sol が400エラー）
+- AIモデルの候補の初期値（Codex は 2026-11-08 に gpt-6.1-sol・gpt-5.6-sol の動作を確認。slide-studio の記録にある「gpt-6.1-sol は400エラー」は現在は当たらない。ほかのモデル・Claude Code の各モデルは実装時に確かめる）
 - pptxのページ画像プレビューの作り方（LibreOffice等が要るか）
 - 画面の文言の細部
