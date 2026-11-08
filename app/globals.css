@@ -212,6 +212,14 @@ to{transform:none}
 .numbers{gap:10px}
 }
 
+/* カーソルが合うと少し動く（2026-11-08 ユーザー指示）。押せる物だけ、動きは小さく */
+button,a.download,.drop-zone,.title-input{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease}
+button:not(:disabled):hover,a.download:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(55,53,47,.08)}
+.segments button:not(:disabled):hover,.purpose-grid button:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(55,53,47,.10);border-color:#cfcdc8}
+.palette-card:not(:disabled):hover{transform:translateY(-3px);box-shadow:0 6px 14px rgba(55,53,47,.12)}
+.drop-zone:hover{transform:translateY(-1px);border-color:#9b9a97;background:var(--soft)}
+.title-input:hover{transform:translateY(-1px)}
+button:not(:disabled):active,a.download:active{transform:translateY(0) scale(.98);box-shadow:none}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 .marquee{scrollbar-width:thin;touch-action:auto}
 .palette-group[aria-hidden=true]{display:none}
