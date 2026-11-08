@@ -10,7 +10,8 @@ export function guard(req: Request, mutate = false) {
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(host))
         throw Error('ローカル接続だけ利用できます');
     const origin = req.headers.get('origin');
-    if (origin && new URL(origin).host !== url.host)
+    // Next.js の開発サーバーでは req.url のホストが実際の接続先と食い違うことがあるため、Host ヘッダーと比べる
+    if (origin && new URL(origin).host !== (rawHost || url.host))
         throw Error('別のサイトからは操作できません');
     if (req.headers.get('sec-fetch-site') === 'cross-site')
         throw Error('別のサイトからは操作できません');
