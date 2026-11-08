@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SLIDE STUDIO NEO 画面案</title>
+<!-- 実装前の確認用モック（2026-11-08）。Google Fonts 未確認のためシステムフォントで表示。動作は見た目の確認用の作り物 -->
+<style>
+:root{--bg:#fff;--side:#F7F7F5;--tx:#37352F;--tx2:#787774;--tx3:#A5A29A;--ln:#E9E9E7;--hv:#F1F1EF;--dk:#37352F;--ok:#448361}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:"Yu Gothic UI","Hiragino Sans","Meiryo",system-ui,sans-serif;color:var(--tx);background:var(--bg);font-size:14px;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--ln);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{background:var(--hv)}
+.mocknav{height:34px;display:flex;align-items:center;gap:6px;padding:0 12px;background:#2F3437;color:#fff;font-size:12px}
+.mocknav button{border-color:#555;color:#ddd;padding:3px 10px;font-size:12px}
+.mocknav button.on{background:#fff;color:#2F3437}
+.mocknav span{margin-left:auto;opacity:.7}
+.screen{display:none;height:calc(100vh - 34px);flex-direction:column}
+.screen.on{display:flex}
+.top{height:52px;flex:0 0 52px;display:flex;align-items:center;gap:12px;padding:0 24px;border-bottom:1px solid var(--ln)}
+.logo{font-weight:700;font-size:15px;letter-spacing:.02em}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ln);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--tx2);cursor:pointer}
+.chip b{color:var(--tx);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.sp{flex:1}
+.lbl{font-size:12px;color:var(--tx2);margin-bottom:6px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{padding:6px 14px}
+.seg button.on{background:var(--dk);color:#fff;border-color:var(--dk)}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:0}
+.col{padding:18px 24px;min-height:0;display:flex;flex-direction:column;gap:16px}
+.col+.col{border-left:1px solid var(--ln)}
+.title{border:none;font:inherit;font-size:22px;font-weight:700;outline:none;width:100%;color:var(--tx)}
+.title::placeholder{color:var(--tx3)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.hint{font-size:12px;color:var(--tx3);margin-top:6px}
+textarea{flex:1;min-height:60px;resize:none;border:1px solid var(--ln);border-radius:8px;padding:12px;font:inherit;color:var(--tx);outline:none}
+textarea:focus{border-color:#BDBAB4}
+.drop{border:1px dashed #CFCDC8;border-radius:8px;padding:10px;text-align:center;font-size:12px;color:var(--tx2)}
+.pal{flex:0 0 auto;border-top:1px solid var(--ln);padding:12px 24px 10px}
+.palhead{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.palhead .seg button{padding:2px 10px;font-size:12px}
+.mq{overflow:hidden;cursor:grab;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.tr{display:flex;gap:10px;width:max-content;padding:3px}
+.pc{flex:0 0 112px;border:1px solid var(--ln);border-radius:10px;padding:7px;background:#fff;user-select:none}
+.pc.on{outline:2px solid var(--dk);outline-offset:1px}
+.bar{display:flex;height:38px;border-radius:6px;overflow:hidden;margin-bottom:5px}
+.bar i{flex:1}
+.pc small{display:block;font-size:10px;color:var(--tx3)}
+.pc span{font-size:12px}
+.foot{flex:0 0 64px;display:flex;align-items:center;gap:16px;padding:0 24px;border-top:1px solid var(--ln)}
+.est{font-size:13px;color:var(--tx2)}
+.est b{color:var(--tx);font-size:15px}
+.disc{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:6px 22px 6px 6px;border-radius:999px;border:1px solid var(--dk);font-size:15px;font-weight:600;background:#fff;cursor:pointer}
+.disc .f{position:absolute;inset:0;width:0;background:var(--dk);transition:width .45s ease}
+.disc .ic{position:relative;width:32px;height:32px;border-radius:50%;background:var(--dk);color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .45s,background .45s,color .45s}
+.disc .t{position:relative;transition:color .45s}
+.disc:hover .f,.disc:focus-visible .f{width:100%}
+.disc:hover .ic,.disc:focus-visible .ic{transform:translateX(7px);background:#fff;color:var(--dk)}
+.disc:hover .t,.disc:focus-visible .t{color:#fff}
+.center{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{width:min(760px,100%);border:1px solid var(--ln);border-radius:14px;padding:28px 32px}
+.meter{position:relative;height:14px;border-radius:999px;background:var(--hv);overflow:hidden;margin:18px 0 10px}
+.meter .v{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--dk);border-radius:999px;transition:width .5s linear}
+.meter .v::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 10px,transparent 10px 20px);animation:mv 1s linear infinite}
+@keyframes mv{to{background-position:28px 0}}
+.nums{display:flex;gap:28px;align-items:baseline}
+.big{font-size:44px;font-weight:700;letter-spacing:-.01em}
+.stages{display:flex;gap:6px;margin-top:22px}
+.st{flex:1;font-size:12px;color:var(--tx3);border-top:3px solid var(--ln);padding-top:6px}
+.st.done{color:var(--tx2);border-color:var(--ok)}
+.st.now{color:var(--tx);font-weight:600;border-color:var(--dk);animation:pl 1.2s ease-in-out infinite}
+@keyframes pl{50%{border-color:#9B9A97}}
+details{margin-top:18px;font-size:12px;color:var(--tx2)}
+details pre{margin-top:8px;background:var(--side);border-radius:8px;padding:10px;max-height:90px;overflow:auto;font-size:11px}
+.dz{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.dz>div{padding:20px 24px;min-height:0;overflow:auto}
+.dz>div+div{border-left:1px solid var(--ln)}
+.hl{border-left:3px solid var(--ln);padding:6px 0 6px 12px;margin-bottom:8px}
+.hl small{color:var(--tx3);font-size:11px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+td,th{border-bottom:1px solid var(--ln);padding:5px 4px;text-align:left}
+th{color:var(--tx2);font-weight:500}
+.prev{aspect-ratio:16/9;border:1px solid var(--ln);border-radius:8px;background:#F0FDFF;display:flex;flex-direction:column;padding:4% 5%;gap:6%}
+.prev .h{height:9%;width:72%;background:#225966;border-radius:3px}
+.prev .g{flex:1;display:flex;align-items:flex-end;gap:5%}
+.prev .g i{flex:1;background:#32A5B1;border-radius:2px 2px 0 0}
+.thumbs{display:flex;gap:8px;margin-top:10px}
+.thumbs div{flex:1;aspect-ratio:16/9;border:1px solid var(--ln);border-radius:4px;background:#F0FDFF}
+.drawer{position:absolute;right:0;top:86px;bottom:0;width:300px;background:#fff;border-left:1px solid var(--ln);box-shadow:-8px 0 24px rgba(0,0,0,.06);padding:16px;display:none}
+.drawer.on{display:block}
+.drawer p{padding:8px 6px;border-radius:6px;font-size:13px}
+.drawer p:hover{background:var(--hv)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="mocknav">画面案：
+<button class="on" data-s="s1">① TOP（入力）</button><button data-s="s2">② 生成中</button><button data-s="s3">③ 設計図の確認（詳細版）</button><button data-s="s4">④ 結果</button>
+<span>確認用モック・実装ではありません</span></div>
+
+<!-- ① TOP -->
+<section class="screen on" id="s1">
+<div class="top"><span class="logo">SLIDE STUDIO NEO</span>
+<span class="chip" title="押すとこの依頼だけ変更"><span class="dot"></span><b>Claude Code</b>・opus・high（自動）</span>
+<span class="sp"></span><button id="hisBtn">履歴</button><button>設定</button></div>
+<div class="main">
+<div class="col">
+<input class="title" placeholder="題名（空なら素材から自動）">
+<div class="two">
+<div><div class="lbl">読み手</div><div class="seg"><button class="on">社内</button><button>社外</button></div></div>
+<div><div class="lbl">出力形式</div><div class="seg" data-multi><button class="on">pptx</button><button>html</button></div></div>
+</div>
+<div><div class="lbl">目的（スライドの種類）</div><div class="seg"><button class="on">提案</button><button>報告</button><button>会議まとめ</button><button>説明・研修</button></div></div>
+<div><div class="lbl">レベル</div><div class="seg" id="lv"><button>簡易</button><button>詳細</button><button class="on">AUTO</button></div>
+<div class="hint" id="lvh">AIが読み手・種類・素材の量から簡易か詳細を選び、理由を1行出します</div></div>
+</div>
+<div class="col">
+<div class="lbl" style="margin:0">素材</div>
+<textarea placeholder="打合せの文字起こし・メモ・数字を貼り付け（整形不要）"></textarea>
+<div class="drop">ファイルを置く／選ぶ（txt・md・docx・pdf・xlsx・csv・pptx・画像）</div>
+</div>
+</div>
+<div class="pal">
+<div class="palhead"><span class="lbl" style="margin:0">配色</span>
+<div class="seg" id="tabs"><button class="on" data-k="all">すべて</button><button data-k="1">やさしい</button><button data-k="2">爽やか</button><button data-k="3">華やか</button><button data-k="4">落ち着き</button></div>
+<span class="sp"></span><span class="hint" style="margin:0" id="sel">選択中：026 浅瀬アクア</span></div>
+<div class="mq" id="mq" tabindex="0" aria-label="配色パネル。ドラッグか左右キーで動かせます"><div class="tr" id="tr"></div></div>
+</div>
+<div class="foot"><span class="sp"></span>
+<span class="est" id="est">生成時間の目安 <b>約4〜14分</b>（AUTOのため幅あり）</span>
+<a class="disc" tabindex="0" id="go"><span class="f"></span><span class="ic">→</span><span class="t">作成する</span></a></div>
+<div class="drawer" id="drawer"><div class="lbl">履歴</div><p>11-08 営業提案（詳細・pptx）</p><p>11-07 定例まとめ（簡易・html）</p><p>11-05 月次報告（詳細・pptx）</p></div>
+</section>
+
+<!-- ② 生成中 -->
+<section class="screen" id="s2">
+<div class="top"><span class="logo">SLIDE STUDIO NEO</span><span class="chip"><span class="dot"></span><b>Claude Code</b>・opus・high</span><span class="sp"></span><button>止める</button></div>
+<div class="center"><div class="card">
+<div class="lbl">11-08 営業提案 ／ 詳細版（AUTO：社外向けの提案で数字の根拠が要るため）／ pptx</div>
+<div class="meter"><div class="v" id="mv"></div></div>
+<div class="nums"><span class="big" id="pct">0%</span>
+<span class="est">残り <b id="rem">約5分</b></span><span class="est">経過 <b id="ela">0:00</b></span><span class="est">目安 <b>設計図まで約3〜5分</b></span></div>
+<div class="stages" id="stg"><div class="st" data-w="5">保存</div><div class="st" data-w="15">質問の要否</div><div class="st" data-w="80">設計図</div><div class="st" style="border-style:dashed">（確認待ち）</div><div class="st">本番</div><div class="st">検査</div><div class="st">レビュー</div><div class="st">手直し</div></div>
+<p class="hint" id="note">いまの段階：設計図（見出しの縦読み・数字台帳）を書いています</p>
+<details><summary>AIの出力ログ</summary><pre>[12:01:04] 依頼フォルダを作成：requests/2026-11-08-営業提案
+[12:01:09] 素材を読み込み（2ファイル）
+[12:01:31] 目的・読み手は素材から読める → 質問なし
+[12:02:10] 設計図を作成中…</pre></details>
+<p class="hint" style="margin-top:14px">デモは30倍速で動いています</p>
+</div></div>
+</section>
+
+<!-- ③ 設計図 -->
+<section class="screen" id="s3">
+<div class="top"><span class="logo">SLIDE STUDIO NEO</span><span class="chip">あなたの確認待ち</span><span class="sp"></span><span class="est">OK後の目安 <b>約8〜14分</b></span></div>
+<div class="dz">
+<div><div class="lbl">見出しの縦読み（5枚）</div>
+<div class="hl"><small>1 ／ 結論・型A</small><br>新プランへの切り替えで、年間の運用工数を約3割減らせる</div>
+<div class="hl"><small>2 ／ 根拠・型B03 ひと工夫したグラフ</small><br>工数の大半は月末の手作業の集計に集中している</div>
+<div class="hl"><small>3 ／ 根拠・型B08 評価表</small><br>3案を比べると、費用と導入期間の両面で新プランが優れる</div>
+<div class="hl"><small>4 ／ 打ち手・型B12 ロードマップ</small><br>12月に試行し、2月から全部署へ広げれば年度内に効果が出る</div>
+<div class="hl"><small>5 ／ お願い・型A</small><br>10月中に試行の発注を決めていただきたい</div>
+</div>
+<div><div class="lbl">数字台帳</div>
+<table><tr><th>項目</th><th>値</th><th>時点</th><th>出所</th></tr>
+<tr><td>月間工数</td><td>xx時間</td><td>2026/9</td><td>素材：打合せ</td></tr>
+<tr><td>削減率</td><td>約3割</td><td>試算</td><td>料金表から計算</td></tr>
+<tr><td>導入期間</td><td>2か月</td><td>—</td><td>素材：料金表</td></tr></table>
+<div class="lbl" style="margin-top:16px">残った質問</div><p class="hint" style="margin:0 0 14px">月間工数の実数が素材にありません（xxのまま進めます）</p>
+<div class="lbl">直し指示（任意）</div>
+<textarea style="width:100%;height:70px;flex:none" placeholder="例：3枚目は2案の比較にして"></textarea>
+<div style="display:flex;gap:8px;margin-top:12px"><button>直してもらう</button><a class="disc" tabindex="0" style="margin-left:auto"><span class="f"></span><span class="ic">→</span><span class="t">OKで本番へ</span></a></div>
+</div></div>
+</section>
+
+<!-- ④ 結果 -->
+<section class="screen" id="s4">
+<div class="top"><span class="logo">SLIDE STUDIO NEO</span><span class="chip"><span class="dot"></span>完了（11分42秒）</span><span class="sp"></span><button>フォルダを開く</button><button>pptxをダウンロード</button></div>
+<div class="dz">
+<div><div class="prev"><div class="h"></div><div class="g"><i style="height:40%"></i><i style="height:62%"></i><i style="height:55%"></i><i style="height:80%"></i></div></div>
+<div class="thumbs"><div></div><div></div><div></div><div></div><div></div></div></div>
+<div><div class="lbl">検査結果</div>
+<table><tr><td>見出しの文型</td><td>合格</td></tr><tr><td>数字の出所</td><td>合格</td></tr><tr><td>最小文字18px</td><td>合格</td></tr><tr><td>Codexレビュー</td><td>指摘2件 → 修正済み</td></tr><tr><td>月間工数</td><td>未達（素材に実数なし）</td></tr></table>
+<div class="lbl" style="margin-top:16px">改善案</div><p class="hint" style="margin:0 0 14px">①月間工数の実数を入れる ②3枚目に導入事例を1つ足す</p>
+<div class="lbl">直し指示（1周）</div><textarea style="width:100%;height:70px;flex:none" placeholder="例：2枚目のグラフを月別にして"></textarea>
+<div style="margin-top:12px;text-align:right"><button>直しを送る</button></div>
+</div></div>
+</section>
+
+<script>
+const $=s=>document.querySelector(s);
+document.querySelectorAll('.mocknav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.mocknav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===b.dataset.s));if(b.dataset.s==='s2')run()});
+document.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>{if(g.hasAttribute('data-multi')){b.classList.toggle('on');if(!g.querySelector('.on'))b.classList.add('on')}else g.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));upd()}));
+function upd(){const lv=$('#lv .on').textContent,html=[...document.querySelectorAll('[data-multi] .on')].map(b=>b.textContent);
+const t={簡易:'約4〜7分',詳細:'設計図まで約3〜5分＋OK後約8〜14分',AUTO:'約4〜14分（AUTOのため幅あり）'};
+$('#est').innerHTML='生成時間の目安 <b>'+t[lv]+'</b>'+(html.length>1?'（両方の形式で＋約5分）':'');
+$('#lvh').textContent={簡易:'設計図で止めずに本番まで。1〜3枚、自己検査だけ',詳細:'設計図で止めてOKを待ち、レビューと1周の手直しまで',AUTO:'AIが読み手・種類・素材の量から簡易か詳細を選び、理由を1行出します'}[lv];
+$('.chip b').nextSibling.textContent='・opus・'+(lv==='簡易'?'medium':'high')+'（自動）'}
+$('#hisBtn').onclick=()=>$('#drawer').classList.toggle('on');
+const P=[[0,'おまかせ','AIが選ぶ'],[2,'026','浅瀬アクア','#F0FDFF #C1EFF1 #74D3D8 #32A5B1 #225966'],[1,'001','桜ミルク','#FFF7F5 #F4CCD2 #E6A6B3 #C9D7C4 #695B64'],[1,'006','朝露セージ','#F3F4E9 #D5DEC6 #A3B69C #7C9485 #43554D'],[1,'021','和紙と抹茶','#FAF5E6 #E2D9BD #B1B78B #838F60 #505D3E'],[1,'023','豆乳カフェ','#FFF8ED #EBDCC7 #CDB89E #A28C76 #625449'],[2,'027','晴天スカイ','#F3FBFF #C9E8FA #83C8F1 #3899D5 #23577B'],[2,'029','北欧レイク','#EFF4F3 #C8D9DB #88ADB8 #527F91 #284957'],[2,'034','月光ネイビー','#F0F3F8 #C9D7E8 #8199BB #405D85 #1C2D4A'],[2,'039','深海ティール','#E9F2F1 #B6D3D0 #609E9C #226D73 #123F4B'],[3,'051','キャンディポップ','#FFF5F7 #FF86B1 #F9CF54 #69D2DD #6750A5'],[3,'054','トロピカル','#FFF3D1 #FFBD45 #FF755F #25B8A0 #236B8E'],[3,'057','サンセット','#FFF0DC #F9C779 #F69872 #E66D76 #8B4B78'],[4,'033','シルバーフォグ','#F6F7F8 #DCE1E5 #B8C4CD #8C9BAA #465767'],[4,'035','雨音ブルー','#F3F6F8 #D4DFE7 #A3B8CB #6F8BA9 #43596F'],[9,'HEX','ブランド色']];
+let cur='026',moved=false;
+function build(k){const tr=$('#tr');tr.innerHTML='';const L=P.filter(p=>k==='all'||p[0]==0||p[0]==9||p[0]==k);
+for(let r=0;r<(L.length<8?4:2);r++)L.forEach(p=>{const d=document.createElement('div');d.className='pc'+(p[1]===cur?' on':'');d.dataset.k=p[1];
+let bar=p[0]===0?'<div class="bar" style="background:var(--side);align-items:center;justify-content:center;color:var(--tx2);font-size:18px">✦</div>':p[0]===9?'<div class="bar" style="border:1px dashed #CFCDC8;align-items:center;justify-content:center;font-size:12px;color:var(--tx3)">#______</div>':'<div class="bar">'+p[3].split(' ').map(c=>'<i style="background:'+c+'"></i>').join('')+'</div>';
+d.innerHTML=bar+'<small>'+p[1]+'</small><span>'+p[2]+'</span>';
+d.onclick=()=>{if(moved)return;cur=p[1];document.querySelectorAll('.pc').forEach(e=>e.classList.toggle('on',e.dataset.k===cur));$('#sel').textContent='選択中：'+p[1]+' '+p[2]};tr.appendChild(d)})}
+build('all');
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{build(b.dataset.k);x=0}));
+const mq=$('#mq'),tr=$('#tr');let x=0,v=-.5,drag=false,last=0,hover=false;
+mq.onmouseenter=()=>hover=true;mq.onmouseleave=()=>hover=false;
+mq.onpointerdown=e=>{drag=true;moved=false;last=e.clientX;mq.style.cursor='grabbing'};
+addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-last;if(Math.abs(dx)>3)moved=true;x+=dx;v=dx;last=e.clientX});
+addEventListener('pointerup',()=>{drag=false;mq.style.cursor='grab';setTimeout(()=>moved=false,0)});
+mq.onkeydown=e=>{if(e.key==='ArrowLeft')v=8;if(e.key==='ArrowRight')v=-8};
+const rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function tick(){const w=tr.scrollWidth/2;if(!drag){if(Math.abs(v)>.5)v*=.95;else v=hover?0:-.5;x+=v}if(x<-w)x+=w;if(x>0)x-=w;tr.style.transform='translateX('+x+'px)';requestAnimationFrame(tick)})();
+if(rm)mq.style.overflowX='auto';
+let timer;function run(){clearInterval(timer);const st=[...document.querySelectorAll('#stg .st')];const est=240;let t=0;
+st.forEach(s=>s.className='st');
+timer=setInterval(()=>{t+=15;const p=Math.min(95,t/est*100);const done=t>=est;
+const pct=done?100:Math.floor(p);$('#mv').style.width=pct+'%';$('#pct').textContent=pct+'%';
+const r=Math.max(0,est-t);$('#rem').textContent=done?'—':'約'+Math.max(1,Math.ceil(r/60))+'分';
+$('#ela').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+const idx=t<12?0:t<36?1:2;st.forEach((s,i)=>{s.classList.toggle('done',i<idx||(done&&i<3));s.classList.toggle('now',!done&&i===idx)});
+if(done){st[3].classList.add('now');$('#note').textContent='設計図ができました。あなたの確認待ちです（メーターは本番で新しく始まります）';clearInterval(timer)}},500)}
+</script>
+</body>
+</html>
