@@ -149,7 +149,7 @@ slide-studio の段取り（依頼保存→質問→設計図→本番pptx／HTM
 - APIキー・`.env`・個人の依頼フォルダ（素材・成果物）はrepoに入れない（作業フォルダは `.gitignore`）
 - 参考UIは ObsidianUI のMITコード。使う時はMITの著作権表示をrepoに残す。見本画像（cdn-new.obsidianui.dev）は使わない
 - うちた氏の原文プロンプト・配色100選：ユーザーは「そのまま使ってよい・公開も可」と判断（2026-11-08）。**ただし原文はうちた氏の著作物で、本人の許諾の記録はまだ無い。** 公開repoに同梱する前に許諾の記録を `docs/` に残す。記録が無いうちは、repoには入れず設定で手元のファイルを指す形で動かす（ツールはどちらでも動く作りにする）
-- フォント：Noto Sans JP と Material Symbols（Google Fonts）を使う想定。**実装前にユーザーへ可否を確認する**
+- フォント：Noto Sans JP と Material Symbols（Google Fonts）を使う（2026-11-08 ユーザー承認）。読み込めない時はシステムフォントで読める
 - README に、必要な物（Node.js、Claude Code CLI か Codex CLI、slide-studio の段取りファイル）と起動手順を書く
 
 ## 7. 技術の前提（案）
