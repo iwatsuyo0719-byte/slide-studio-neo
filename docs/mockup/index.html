@@ -31,6 +31,14 @@ button:hover{background:var(--hv)}
 .col{padding:18px 24px;min-height:0;display:flex;flex-direction:column;gap:16px}
 .col+.col{border-left:1px solid var(--ln)}
 .lock{opacity:.45;pointer-events:none;transition:opacity .3s}
+#left{justify-content:space-between;gap:12px}
+#left .lbl{font-size:13px;margin-bottom:8px}
+#left .seg{flex-wrap:nowrap;gap:8px}
+#left .seg button{flex:1;padding:0 12px;height:46px;font-size:15px;border-radius:8px}
+#left .seg.grid{display:grid;grid-template-columns:1fr 1fr}
+#left .seg.grid button{height:54px;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px}
+#left .seg.grid button em{font-style:normal;font-size:18px;opacity:.7}
+#left .hint{font-size:13px}
 .title{border:none;font:inherit;font-size:22px;font-weight:700;outline:none;width:100%;color:var(--tx)}
 .title::placeholder{color:var(--tx3)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -116,7 +124,7 @@ th{color:var(--tx2);font-weight:500}
 <div><div class="lbl">読み手</div><div class="seg"><button class="on">社内</button><button>社外</button></div></div>
 <div><div class="lbl">出力形式</div><div class="seg" data-multi><button class="on">pptx</button><button>html</button></div></div>
 </div>
-<div><div class="lbl">目的（スライドの種類）</div><div class="seg"><button class="on">提案</button><button>報告</button><button>会議まとめ</button><button>説明・研修</button></div></div>
+<div><div class="lbl">目的（スライドの種類）</div><div class="seg grid"><button class="on"><em>◎</em>提案</button><button><em>↗</em>報告</button><button><em>☰</em>会議まとめ</button><button><em>◇</em>説明・研修</button></div></div>
 <div><div class="lbl">レベル</div><div class="seg" id="lv"><button>簡易</button><button>詳細</button><button class="on">AUTO</button></div>
 <div class="hint" id="lvh">AIが読み手・種類・素材の量から簡易か詳細を選び、理由を1行出します</div></div>
 </div>
