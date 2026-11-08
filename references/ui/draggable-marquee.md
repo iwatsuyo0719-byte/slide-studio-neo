@@ -1,6 +1,13 @@
 # 参考UI：DraggableMarquee（配色パネル用）
 
-2026-11-08 ユーザーが貼り付けたコード（原文のまま）。出典は Obsidian UI（obsidianui.dev）とみられる。**ライセンスと、画像CDN（cdn-new.obsidianui.dev）の利用条件は未確認。** 公開repoで使う前に確かめる。コンポーネント本体（`@/components/block/draggable-marquee`）は含まれていない。
+2026-11-08 ユーザーが貼り付けたコード（原文のまま）。出典は Obsidian UI（obsidianui.dev）とみられる。コンポーネント本体（`@/components/block/draggable-marquee`）は含まれていない。
+
+## ライセンスと動き（2026-11-08 公式サイトで確認）
+
+- コードはMITライセンス・無料（サイトのトップと利用規約5章。GitHubのLICENSEファイル本体は未確認）。使う時はMITの著作権表示を残す
+- **見本の画像（cdn-new.obsidianui.dev/imagess/1〜4.png）は再利用の許諾が無い**（利用規約5章：デモ素材は動きを見せるためのもので、自分の素材に差し替える）。このProjectでは画像を使わず、配色カードを自前で描く
+- 動き：GSAP＋Draggable で無限ループする横一列。ドラッグでき、離すと慣性で流れて減速する。フォーカス時は左右キーで動く。`pauseOnHover` あり。「動きを減らす」設定では普通の横スクロールになる。依存は gsap（next/image を使う）
+- 出典：https://obsidianui.dev/markdown/docs/draggable-marquee.md
 
 ```tsx
 "use client";
