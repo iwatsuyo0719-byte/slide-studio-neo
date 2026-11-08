@@ -31,6 +31,9 @@ button:hover{background:var(--hv)}
 .col{padding:18px 24px;min-height:0;display:flex;flex-direction:column;gap:16px}
 .col+.col{border-left:1px solid var(--ln)}
 .lock{opacity:.45;pointer-events:none;transition:opacity .3s}
+.hd{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--tx);margin-bottom:8px}
+.hd .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--dk);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+.hd small{font-size:12px;font-weight:400;color:var(--tx3)}
 #left{justify-content:space-between;gap:12px}
 #left .lbl{font-size:13px;margin-bottom:8px}
 #left .seg{flex-wrap:nowrap;gap:8px}
@@ -119,19 +122,19 @@ th{color:var(--tx2);font-weight:500}
 
 <div class="main">
 <div class="col" id="left">
-<input class="title" placeholder="題名（空なら素材から自動）">
+<input class="title" style="font-size:20px" placeholder="題名（任意・空なら素材から自動）">
 <div class="two">
-<div><div class="lbl">読み手</div><div class="seg"><button class="on">社内</button><button>社外</button></div></div>
-<div><div class="lbl">出力形式</div><div class="seg" data-multi><button class="on">pptx</button><button>html</button></div></div>
+<div><div class="hd"><span class="n">1</span>読み手</div><div class="seg"><button class="on">社内</button><button>社外</button></div></div>
+<div><div class="hd"><span class="n">2</span>出力形式<small>両方も可</small></div><div class="seg" data-multi><button class="on">pptx</button><button>html</button></div></div>
 </div>
-<div><div class="lbl">目的（スライドの種類）</div><div class="seg grid"><button class="on"><em>◎</em>提案</button><button><em>↗</em>報告</button><button><em>☰</em>会議まとめ</button><button><em>◇</em>説明・研修</button></div></div>
-<div><div class="lbl">レベル</div><div class="seg" id="lv"><button>簡易</button><button>詳細</button><button class="on">AUTO</button></div>
+<div><div class="hd"><span class="n">3</span>目的<small>スライドの種類</small></div><div class="seg grid"><button class="on"><em>◎</em>提案</button><button><em>↗</em>報告</button><button><em>☰</em>会議まとめ</button><button><em>◇</em>説明・研修</button></div></div>
+<div><div class="hd"><span class="n">4</span>レベル</div><div class="seg" id="lv"><button>簡易</button><button>詳細</button><button class="on">AUTO</button></div>
 <div class="hint" id="lvh">AIが読み手・種類・素材の量から簡易か詳細を選び、理由を1行出します</div></div>
 </div>
 
 <div class="col">
 <div class="pane on" id="p-input">
-<div class="lbl" style="margin:0">素材</div>
+<div class="hd" style="margin:0"><span class="n">5</span>素材<small>貼り付けかファイル</small></div>
 <textarea placeholder="打合せの文字起こし・メモ・数字を貼り付け（整形不要）"></textarea>
 <div class="drop">ファイルを置く／選ぶ（txt・md・docx・pdf・xlsx・csv・pptx・画像）</div>
 </div>
@@ -164,7 +167,7 @@ th{color:var(--tx2);font-weight:500}
 </div>
 
 <div class="pal" id="pal">
-<div class="palhead"><span class="lbl" style="margin:0">配色</span>
+<div class="palhead"><span class="hd" style="margin:0"><span class="n">6</span>配色<small>ドラッグで流せます</small></span>
 <div class="seg" id="tabs"><button class="on" data-k="all">すべて</button><button data-k="1">やさしい</button><button data-k="2">爽やか</button><button data-k="3">華やか</button><button data-k="4">落ち着き</button></div>
 <span class="sp"></span><span class="hint" style="margin:0" id="sel">選択中：026 浅瀬アクア</span></div>
 <div class="mq" id="mq" tabindex="0" aria-label="配色パネル。ドラッグか左右キーで動かせます"><div class="tr" id="tr"></div></div>
@@ -172,7 +175,7 @@ th{color:var(--tx2);font-weight:500}
 
 <div class="foot"><span class="hint" style="margin:0" id="footl"></span><span class="sp"></span>
 <span class="est" id="est">生成時間の目安 <b>約4〜14分</b>（AUTOのため幅あり）</span>
-<a class="disc" tabindex="0" id="go"><span class="f"></span><span class="ic">→</span><span class="t" id="got">作成する</span></a></div>
+<span class="hd" style="margin:0" id="n7"><span class="n">7</span></span><a class="disc" tabindex="0" id="go"><span class="f"></span><span class="ic">→</span><span class="t" id="got">作成する</span></a></div>
 
 <div class="edgetab" id="edgetab">設計図を確認</div>
 <aside class="edge" id="edge">
@@ -205,7 +208,7 @@ document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===pan
 const busy=s!=='input';$('#left').classList.toggle('lock',busy);$('#pal').classList.toggle('lock',busy);
 $('#edge').classList.toggle('on',s==='design');$('#edgetab').classList.remove('on');
 clearInterval(timer);$('#meter').classList.remove('wait');
-const go=$('#go');go.style.display='';
+const go=$('#go');go.style.display='';$('#n7').style.display=s==='input'?'':'none';
 if(s==='input'){$('#got').textContent='作成する';upd();$('#footl').textContent=''}
 if(s==='run'){$('#got').textContent='止める';$('#est').innerHTML='デモは30倍速';$('#footl').textContent='入力と配色は生成中ロックされます';run()}
 if(s==='design'){$('#got').textContent='止める';$('#est').innerHTML='あなたの確認待ち';$('#footl').textContent='設計図は右端のパネルで確認します（×で畳んでも右端のつまみから開ける）';waitView()}
