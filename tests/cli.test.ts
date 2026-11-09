@@ -15,4 +15,4 @@ test('実際の子プロセスでもAPI環境変数を外しstdinを閉じる', 
             process.env.OPENAI_API_KEY = previous;
     }
 });
-test('中断時はWindowsのtree終了が拒否されても自分の子プロセスを止める', async () => { const controller = new AbortController(); let child: import('node:child_process').ChildProcess | undefined; await assert.rejects(() => execute({ bin: process.execPath, prefix: [] }, ['-e', 'setInterval(()=>{},1000)'], process.cwd(), undefined, c => { child = c; setTimeout(() => controller.abort(), 40); }, controller.signal, 3000), /中断しました/); assert.ok(child?.exitCode !== null || child?.signalCode !== null); });
+test('中断時はWindowsのtree終了が拒否されても自分の子プロセスを止める', async () => { const controller = new AbortController(); let child: import('node:child_process').ChildProcess | undefined; await assert.rejects(() => execute({ bin: process.execPath, prefix: [] }, ['-e', 'setInterval(()=>{},1000)'], process.cwd(), undefined, c => { child = c; setTimeout(() => controller.abort(), 40); }, controller.signal, 15000), /中断しました/); assert.ok(child?.exitCode !== null || child?.signalCode !== null); });

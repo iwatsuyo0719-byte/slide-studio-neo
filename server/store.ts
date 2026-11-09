@@ -24,9 +24,12 @@ export async function atomic(file: string, data: unknown) {
             break;
         }
         catch (e) {
-            if (attempt >= 7 || !['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code || ''))
+            // Windowsでは読み取り中・ウイルス対策の検査中に置き換えが一時的に拒否されるため、合計約3秒まで待ってやり直す
+            if (attempt >= 19 || !['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code || '')) {
+                await fs.rm(temp, { force: true }).catch(() => { });
                 throw e;
-            await new Promise(resolve => setTimeout(resolve, 10 * (attempt + 1)));
+            }
+            await new Promise(resolve => setTimeout(resolve, Math.min(25 * (attempt + 1), 200)));
         }
     }
 }
@@ -49,8 +52,19 @@ export function requestDir(id: string) {
         throw Error('依頼IDが不正です');
     return path.join(requests, id);
 }
+// 最後に保存した状態を覚えておき、画面の更新確認のたびにファイルを開かない（Windowsでは開いている間の置き換えが拒否されるため）
+// 別のプロセス（テストなど）が書き換えた時に気づけるよう、保存した時の更新時刻も控え、ファイルを開かない stat で比べる
+const memory = (globalThis as typeof globalThis & { neoRecords?: Map<string, { record: RecordData; mtimeMs: number }> }).neoRecords ??= new Map<string, { record: RecordData; mtimeMs: number }>();
 export async function readRecord(id: string) {
-    const r = await jsonRead<RecordData | null>(path.join(requestDir(id), 'state.json'), null);
+    const file = path.join(requestDir(id), 'state.json');
+    const cached = memory.get(id);
+    if (cached) {
+        const stat = await fs.stat(file).catch(() => null);
+        if (stat && stat.mtimeMs === cached.mtimeMs)
+            return structuredClone(cached.record);
+        memory.delete(id);
+    }
+    const r = await jsonRead<RecordData | null>(file, null);
     if (!r)
         throw Error('依頼が見つかりません');
     return r;
@@ -59,7 +73,7 @@ const saveQueues = new Map<string, Promise<void>>();
 export async function save(r: RecordData) {
     r.updated = Date.now();
     const snapshot = structuredClone(r);
-    const next = (saveQueues.get(r.id) || Promise.resolve()).catch(() => { }).then(() => atomic(path.join(requestDir(r.id), 'state.json'), snapshot));
+    const next = (saveQueues.get(r.id) || Promise.resolve()).catch(() => { }).then(async () => { const file = path.join(requestDir(r.id), 'state.json'); await atomic(file, snapshot); const stat = await fs.stat(file).catch(() => null); if (stat) memory.set(r.id, { record: snapshot, mtimeMs: stat.mtimeMs }); else memory.delete(r.id); });
     saveQueues.set(r.id, next);
     try {
         await next;

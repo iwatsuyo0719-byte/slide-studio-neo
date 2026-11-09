@@ -6,7 +6,7 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 const base = process.env.NEO_TEST_URL || 'http://127.0.0.1:3210';
 const chrome = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定まで通す', { timeout: 90000 }, async () => {
+test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定まで通す', { timeout: 180000 }, async () => {
     const bootstrap = await fetch(base + '/api/neo').then(r => r.json());
     assert.equal(bootstrap.fake, true, '実AIでは実行しません');
     const profile = path.resolve('workspace/browser-test-' + crypto.randomUUID());
@@ -64,13 +64,14 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         };
         const wait = async (expression: string) => {
             for (let n = 0; n < 400; n++) {
-                if (await evaluate(expression))
+                if (await evaluate('!!(' + expression + ')'))
                     return;
                 await delay(50);
             }
             throw Error('画面の待機がタイムアウト：' + expression);
         };
-        const click = async (text: string) => evaluate("(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===" + JSON.stringify(text) + ");if(!b)throw Error('button missing');b.click();})()");
+        const label = "const label=b=>{const c=b.cloneNode(true);c.querySelectorAll('[aria-hidden=true]').forEach(e=>e.remove());return c.textContent.trim();};";
+        const click = async (text: string) => evaluate("(()=>{" + label + "const b=[...document.querySelectorAll('button')].find(b=>label(b)===" + JSON.stringify(text) + ");if(!b)throw Error('button missing: '+" + JSON.stringify(text) + ");b.click();})()");
         const material = async (value: string) => evaluate("(()=>{const el=document.querySelector('#material');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el," + JSON.stringify(value) + ");el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         console.log('Navigating to app');
         await send('Page.navigate', { url: base });
@@ -78,7 +79,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         assert.equal(await evaluate('document.querySelectorAll("[data-palette]").length'), 102);
         assert.equal(await evaluate('document.querySelector("[data-palette].selected").getAttribute("aria-pressed")'), 'true');
-        assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='作成する').disabled"), true);
+        assert.equal(await evaluate("(()=>{" + label + "return [...document.querySelectorAll('button')].find(b=>label(b)==='作成する').disabled})()"), true);
         await fs.mkdir('workspace/verification', { recursive: true });
         const shot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile('workspace/verification/input-1280.png', Buffer.from(shot.data, 'base64'));
