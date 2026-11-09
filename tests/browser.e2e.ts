@@ -79,6 +79,17 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         assert.equal(await evaluate('document.querySelectorAll("[data-palette]").length'), 102);
         assert.equal(await evaluate('document.querySelector("[data-palette].selected").getAttribute("aria-pressed")'), 'true');
+        // ホバーで拡大し、カードの配置と1画面の高さを維持する。
+        const cardRect = await evaluate("(()=>{const r=document.querySelectorAll('[data-palette]')[1].getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};})()");
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cardRect.x + cardRect.width / 2, y: cardRect.y + cardRect.height / 2 });
+        await wait("document.querySelector('.palette-popup')");
+        await delay(200);
+        assert.equal(await evaluate("document.querySelector('.palette-popup').offsetWidth"), 280);
+        assert.equal(await evaluate("document.querySelectorAll('.palette-popup-codes span').length"), 5);
+        assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
+        assert.equal(await evaluate("Math.round(document.querySelectorAll('[data-palette]')[1].getBoundingClientRect().width)"), Math.round(cardRect.width));
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
+        await wait("!document.querySelector('.palette-popup')");
         assert.equal(await evaluate("(()=>{" + label + "return [...document.querySelectorAll('button')].find(b=>label(b)==='作成する').disabled})()"), true);
         await fs.mkdir('test-results/verification', { recursive: true });
         const shot = await send('Page.captureScreenshot', { format: 'png' });
@@ -120,6 +131,14 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
         await wait("matchMedia('(prefers-reduced-motion: reduce)').matches");
         assert.equal(await evaluate("getComputedStyle(document.querySelector('.discover')).animationName"), 'none');
+        // 動きを減らす設定でも、フォーカス・左右キー・Escで扱える。
+        await evaluate("document.querySelector('[data-palette=auto]').focus()");
+        await wait("document.querySelector('.palette-popup')");
+        assert.equal(await evaluate("getComputedStyle(document.querySelector('.palette-popup')).animationName"), 'none');
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight' });
+        await wait("document.activeElement?.getAttribute('data-palette') !== 'auto' && document.querySelector('.palette-popup-colors')");
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape' });
+        await wait("!document.querySelector('.palette-popup')");
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
         assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
         assert.deepEqual(errors, [], 'ブラウザ実行時エラーが無い');

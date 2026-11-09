@@ -77,6 +77,17 @@ fieldset{min-inline-size:0;border:0;margin:0;padding:0}
 .palette-card.selected{outline:2px solid var(--text);outline-offset:1px}
 .color-bar{display:flex;flex-shrink:0;height:37px;border-radius:5px;overflow:hidden;background:var(--soft);margin-bottom:3px}
 .color-bar i{flex:1}
+.palette-popup{position:fixed;z-index:45;width:280px;max-width:calc(100vw - 24px);min-height:228px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--text);box-shadow:0 8px 28px color-mix(in srgb,var(--text) 18%,transparent);overflow:hidden;cursor:pointer;transform-origin:center bottom;animation:palette-popup-in 180ms ease-out}
+.palette-popup-colors{display:flex;height:92px}
+.palette-popup-colors i{flex:1}
+.palette-popup-codes{display:flex;padding-top:6px}
+.palette-popup-codes span{flex:1;min-width:0;text-align:center;font:10px/1.5 ui-monospace,monospace;color:var(--muted)}
+.palette-popup-copy{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.palette-popup-copy strong{font-size:17px;line-height:1.4;font-weight:700}
+.palette-popup-copy p{font-size:13px;line-height:1.5}
+.palette-popup-copy small{font-size:11px;color:var(--muted)}
+@keyframes palette-popup-in{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.palette-popup{animation:none}}
 .color-bar>span{margin:auto;font-size:13px;color:var(--muted)}
 .palette-card small{font-size:10px;color:var(--muted)}
 .palette-card>span:last-child{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
