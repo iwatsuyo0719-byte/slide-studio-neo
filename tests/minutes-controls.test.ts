@@ -46,7 +46,7 @@ test('議事録protocol：本番・手直し・短縮は字数と保持事項、
     const r = { input } as RecordData;
     for (const stage of ['本番', '手直し'] as const) {
         const text = minutesProtocol(r, stage, '/request', '/prompts');
-        assert.match(text, /約2,500字（A4 2〜3枚）/);
+        assert.match(text, /約1,600〜1,800字（A4 2枚以下）/);
         assert.match(text, /決定事項・宿題・未確認事項は削らない/);
     }
     const text = minutesProtocol(r, '手直し', '/request', '/prompts', true);
@@ -63,7 +63,7 @@ test('4枚：短縮1回でなお4枚でも完了し、短縮中のメーター�
     const r = await done(id);
     assert.equal(r.pdfPages, 4);
     assert.equal(r.pdfNote, undefined);
-    assert.equal(r.pdfPageNote, 'PDFは 4 枚です（目安2〜3枚）');
+    assert.equal(r.pdfPageNote, 'PDFは 4 枚です（目安2枚以下・多くて3枚）');
     assert.equal(shortens(r), 1);
     assert.ok(r.logs.some(l => l.includes(r.pdfPageNote!)));
     assert.ok(r.minutes!.length > 3500 && r.minutes!.length < 8000);

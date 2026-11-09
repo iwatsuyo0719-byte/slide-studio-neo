@@ -59,9 +59,9 @@ export function minutesProtocol(r: RecordData, stage: Stage, dir: string, prompt
         'ledger.md があれば読み、design-feedback.md・final-feedback.md があれば必ず反映します。修正時は必ずディスク上の最新の minutes.md を読み、手動編集済みの内容を引き継ぎます。',
         stage === '設計図' ? '事実・数値・決定・宿題・短い引用の台帳を ledger.md に保存。直し指示時は ledger.md を修正。版は詳細に固定。decision.json による版選びは行いません。question.json は使いません。この段階では台帳までで終了します。' : '',
         stage === '本番' ? 'ledger.md・approved.md と minutes.md の規則に従って minutes.md を作ります。冒頭情報→決定事項→宿題（担当・内容・期限の表）→論点と経緯→次回の確認事項の順。不明な数値はxx、発言は「」の引用を保持します。' : '',
-        stage === '本番' || stage === '手直し' ? '本文は1時間の会議で約2,500字（A4 2〜3枚）を目安にする。超えそうな時は論点と経緯を要約して短くする（決定事項・宿題・未確認事項は削らない）。' : '',
+        stage === '本番' || stage === '手直し' ? '本文は1時間の会議で基本は約1,600〜1,800字（A4 2枚以下）にする。論点や決定・宿題が多く、2枚に収めると決定の理由や経緯が欠ける時だけ約2,500字（A4 3枚）まで書いてよい。どちらにするかは素材を見て決め、3枚にした時は check.md に理由を1行残す。超えそうな時は論点と経緯を要約して短くする（決定事項・宿題・未確認事項は削らない）。' : '',
         shorten ? 'PDFが3枚を超えました。必ずディスク上の最新の minutes.md を元に、論点と経緯を短くまとめ直します。決定事項・宿題・未確認事項は削らず、事実や引用を変えません。今回は分量の短縮だけを1回行い、自己検査を更新し revision.md に短縮の対応を追記します。' : '',
-        stage === '検査' ? 'minutes.md を自己検査し check.md に6項目を記録：構成5項目の順序、宿題の表（担当・内容・期限）、素材にない数値を作っていないか（xx）、相手の発言を言い換えていないか（「」の引用）、確認できない点の未確認表示、分量の目安（1時間でA4 2〜3枚、3枚を超える時は経緯を短く）。満たせない項目は未達と書きます。' : '',
+        stage === '検査' ? 'minutes.md を自己検査し check.md に6項目を記録：構成5項目の順序、宿題の表（担当・内容・期限）、素材にない数値を作っていないか（xx）、相手の発言を言い換えていないか（「」の引用）、確認できない点の未確認表示、分量の目安（1時間で原則A4 2枚以下、内容が多い時は3枚まで。3枚にした時はその理由を1行。3枚を超える時は経緯を短く）。満たせない項目は未達と書きます。' : '',
         stage === 'レビュー' ? '新しい独立レビューです。read-only で request.md・material.md・ledger.md・minutes.md・check.md・' + prompts + '/meeting.md・' + prompts + '/minutes.md を読みます。素材との食い違い・決定と宿題の取り違え・経緯の飛躍・未確認の付け忘れを確認。応答はMarkdownの総合判定＋箇所／重要度／根拠／修正方法の指摘一覧。ファイルは書き換えず、サーバーが応答を review.md に保存します。' : '',
         stage === '手直し' && !shorten ? 'review.md（あれば）と final-feedback.md（あれば）に従って minutes.md を1周修正し、自己検査6項目を再確認して check.md を更新。revision.md に対応・未達・確認結果を書きます。' : '',
         r.reviewFallback && r.reviewer === 'claude' ? 'Codexレビュー未実施（Claude Codeで代替）を明記します。' : '',
@@ -179,7 +179,7 @@ async function minutesPDF(r: RecordData, job?: Job) {
     // 偽AIの長文ケースだけは、実PDFの存在を確かめたうえで4枚として経路を再現する。
     r.pdfPages = fake() && r.input.material.includes('[long]') && (await fs.readFile(path.join(dir, 'minutes.md'), 'utf8')).length > 3500 ? 4 : pages || undefined;
     if (r.pdfPages) {
-        r.pdfPageNote = 'PDFは ' + r.pdfPages + ' 枚です（目安2〜3枚）';
+        r.pdfPageNote = 'PDFは ' + r.pdfPages + ' 枚です（目安2枚以下・多くて3枚）';
         await log(r, r.pdfPageNote);
     }
 }

@@ -222,7 +222,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('作成する');
         await wait('window.__shorteningObserved');
         await evaluate('window.fetch=window.__lengthFetch');
-        await wait("document.querySelector('.result-top') && document.querySelector('.pdf-page-note')?.textContent==='PDFは 4 枚です（目安2〜3枚）'");
+        await wait("document.querySelector('.result-top') && document.querySelector('.pdf-page-note')?.textContent==='PDFは 4 枚です（目安2枚以下・多くて3枚）'");
         assert.equal(await evaluate('window.__invalidMinutesMeter'), false);
         assert.equal(await evaluate('window.__shorteningObserved'), true);
         assert.equal(await evaluate("(()=>{const r=document.querySelector('.pdf-page-note').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight && r.right<=innerWidth})()"), true, '枚数はスクロールせず読める');
