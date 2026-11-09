@@ -5,8 +5,25 @@ export const repo = process.cwd();
 export const workspace = path.join(repo, 'workspace');
 export const requests = path.join(workspace, 'requests');
 export async function jsonRead<T>(file: string, fallback: T): Promise<T> {
+    for (let attempt = 0;; attempt++) {
+        try {
+            return await jsonReadOnce(file, fallback);
+        }
+        catch (e) {
+            // 直接上書きの途中を読んだ時だけ、少し待って読み直す
+            if (!(e instanceof SyntaxError) || attempt >= 5)
+                throw e;
+            await new Promise(resolve => setTimeout(resolve, 30));
+        }
+    }
+}
+async function jsonReadOnce<T>(file: string, fallback: T): Promise<T> {
     try {
-        return JSON.parse(await fs.readFile(file, 'utf8'));
+        // AIがWindowsのPowerShellで書くと先頭にBOMが付くことがあるので取り除く
+        // Windows PowerShell 5.1 の Out-File は UTF-16LE で書くので、その印（FF FE）があれば合わせて読む
+        const raw = await fs.readFile(file);
+        const text = raw[0] === 0xff && raw[1] === 0xfe ? raw.subarray(2).toString('utf16le') : raw.toString('utf8');
+        return JSON.parse(text.replace(/^\uFEFF/, ''));
     }
     catch (e) {
         if ((e as NodeJS.ErrnoException).code === 'ENOENT')
@@ -25,9 +42,15 @@ export async function atomic(file: string, data: unknown) {
         }
         catch (e) {
             // Windowsでは読み取り中・ウイルス対策の検査中に置き換えが一時的に拒否されるため、合計約3秒まで待ってやり直す
-            if (attempt >= 19 || !['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code || '')) {
+            if (!['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code || '')) {
                 await fs.rm(temp, { force: true }).catch(() => { });
                 throw e;
+            }
+            if (attempt >= 19) {
+                // 置き換えがどうしても拒否される時（ウイルス対策の検査など）は、中身を直接上書きする。読む側は壊れた途中の内容を読み直す
+                await fs.writeFile(file, JSON.stringify(data, null, 2));
+                await fs.rm(temp, { force: true }).catch(() => { });
+                break;
             }
             await new Promise(resolve => setTimeout(resolve, Math.min(25 * (attempt + 1), 200)));
         }
@@ -117,6 +140,11 @@ export async function artifacts(r: RecordData) {
     }
     r.files = files;
     for (const key of ['design', 'check', 'review'] as const) {
+        // レビュー段階を通っていない（簡易版など）のに作るAIが review.md を書いた場合は、レビュー結果として扱わない
+        if (key === 'review' && !r.reviewer) {
+            r.review = '';
+            continue;
+        }
         r[key] = await fs.readFile(path.join(base, key + '.md'), 'utf8').catch(() => '');
     }
 }

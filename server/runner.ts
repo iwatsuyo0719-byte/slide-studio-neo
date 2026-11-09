@@ -78,7 +78,8 @@ async function actualStage(r: RecordData, stage: Stage, job: Job) {
         stage === '検査' ? '本番のレンダリングを preview/ に保存して実画像を確認。見出し文型・はみ出し・重なり・最小文字・空白・数字の出所・試作でつまずいた3点を check.md に記録。未達・実行できない項目は未達／未確認。改善案も記録。' : '',
         review ? '新しい独立レビューです。ファイルを書き換えず read-only で、request.md・material.md・design.md・成果物・check.md・preview/画像・採用規則を読む。主張・数値・証拠・型と構図・規準を確認。応答本文をMarkdownの総合判定＋ページ／重要度／根拠／修正方法を持つ指摘一覧にする。サーバーが応答を review.md に保存する。' : '',
         stage === '手直し' ? 'review.md と final-feedback.md（あれば）を読み、1周だけ直す。修正後の画像を作り実画像で再確認する。check.md を更新し、revision.md に対応・未達・修正後の画像確認結果を書く。' : '',
-        r.reviewFallback ? 'Codexレビュー未実施（Claude Codeで代替）を明記する。' : ''
+        r.reviewFallback ? 'Codexレビュー未実施（Claude Codeで代替）を明記する。' : '',
+        review ? '' : 'review.md はレビュー段階の結果専用なので、この段階では作らない・書き換えない。自己点検の記録は check.md などこの段階の契約ファイルに書く。'
     ].filter(Boolean).join('\n');
     let buffer = '';
     let last = 0;
@@ -106,6 +107,9 @@ async function run(r: RecordData, stage: Stage, job: Job) {
     r.stageStart = Date.now();
     await log(r, 'いまの段階：' + stage);
     await save(r);
+    // 前の段階で作るAIが書いた review.md が、レビュー失敗時にレビュー結果として残らないよう先に消す
+    if (stage === 'レビュー')
+        await fs.rm(path.join(requestDir(r.id), 'review.md'), { force: true });
     if (fake() && stage === 'レビュー')
         r.reviewer = 'codex';
     if (fake())

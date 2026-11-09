@@ -54,6 +54,8 @@ export function execute(command: Command, args: string[], cwd: string, onData?: 
         });
     });
 }
+// codex login status は環境によって10秒前後かかるため余裕を持たせる
+const STATUS_TIMEOUT = 30000;
 let cached: {
     at: number;
     value: Record<Provider, CLIStatus>;
@@ -72,14 +74,14 @@ export async function statuses(force = false): Promise<Record<Provider, CLIStatu
         }
         try {
             if (p === 'codex') {
-                const out = await execute(cmd, ['login', 'status'], process.cwd(), undefined, undefined, undefined, 12000);
+                const out = await execute(cmd, ['login', 'status'], process.cwd(), undefined, undefined, undefined, STATUS_TIMEOUT);
                 const ok = /Logged in using ChatGPT/i.test(out);
                 value[p] = { installed: true, usable: ok, message: ok ? 'ChatGPTログイン済み' : 'codex login でChatGPTにログインしてください（API認証は使えません）' };
             }
             else {
-                const help = await execute(cmd, ['auth', '--help'], process.cwd(), undefined, undefined, undefined, 12000);
+                const help = await execute(cmd, ['auth', '--help'], process.cwd(), undefined, undefined, undefined, STATUS_TIMEOUT);
                 if (/\bstatus\b/.test(help)) {
-                    const out = await execute(cmd, ['auth', 'status'], process.cwd(), undefined, undefined, undefined, 12000);
+                    const out = await execute(cmd, ['auth', 'status'], process.cwd(), undefined, undefined, undefined, STATUS_TIMEOUT);
                     let data;
                     try {
                         data = JSON.parse(out);

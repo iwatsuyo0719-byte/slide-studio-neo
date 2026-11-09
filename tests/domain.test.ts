@@ -17,3 +17,15 @@ test('実績3件から組み合わせ別の中央値を使う', () => { const ke
 test('100%は完了だけ・超過・停止時は固定', () => { const r = { status: 'running', stage: '手直し', phase: 'production', selectedLevel: '詳細', stageStart: 0, phaseStart: 0, activeMs: 0 } as RecordData; assert.ok(progress(r, 99999999, [100, 200]).percent < 100); assert.equal(progress(r, 99999999, [100, 200]).overtime, true); assert.equal(progress({ ...r, status: 'done' }, 99999999, [100, 200]).percent, 100); assert.deepEqual(progress({ ...r, status: 'design' }, 1000, [100, 200]), progress({ ...r, status: 'design' }, 9000, [100, 200])); });
 test('CLI引数：Codex read-only、stdin終了はexecuteでignore、Claude許可を限定', () => { const a = cliArgs(input.ai, '詳細', defaults, 'C:/req', 'test', true, 'C:/prompts'); assert.ok(a.includes('read-only')); assert.ok(a.includes('model_reasoning_effort=high')); const b = cliArgs({ provider: 'claude', model: 'opus', depth: 'auto' }, '詳細', defaults, 'C:/req', 'test', false, 'C:/prompts'); assert.ok(b.includes('Read(C:/prompts/**)')); assert.ok(!b.includes('--dangerously-skip-permissions')); });
 test('偽pptxはOOXMLのzipを生成する', () => { const bytes = fakePptx(); assert.equal(bytes.readUInt32LE(0), 0x04034b50); assert.ok(bytes.includes(Buffer.from('ppt/slides/slide1.xml'))); assert.ok(bytes.includes(Buffer.from('SLIDE STUDIO NEO'))); });
+test('AIが書いたBOM付きJSONも読める', async () => {
+    const { jsonRead } = await import('../server/store');
+    const fs = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'neo-')), 'decision.json');
+    await fs.writeFile(file, '\uFEFF{"level":"簡易"}');
+    assert.deepEqual(await jsonRead(file, null), { level: '簡易' });
+    await fs.writeFile(file, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"level":"詳細"}', 'utf16le')]));
+    assert.deepEqual(await jsonRead(file, null), { level: '詳細' });
+    await fs.rm(path.dirname(file), { recursive: true, force: true });
+});
