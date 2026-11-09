@@ -240,3 +240,7 @@ button:not(:disabled):active,a.download:active{transform:translateY(0) scale(.96
 .left-column{gap:8px;padding-top:16px;padding-bottom:16px}
 .level-hint{min-height:32px}
 
+
+.fixed-format{margin:0;padding:11px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+.minutes-document{height:100%;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:8px;font-size:14px;line-height:1.6;overflow-wrap:anywhere;background:#fff}
+.minutes-document h1{font-size:22px}.minutes-document h2,.minutes-document h3{font-size:18px;margin:18px 0 8px}.minutes-document table{border-collapse:collapse;width:100%;font-size:13px}.minutes-document th,.minutes-document td{border:1px solid #bbb;padding:6px}.minutes-document th{background:#f2f2f2}.minutes-document .unconfirmed{font-size:12px}.pdf-note{font-size:12px;max-width:270px}

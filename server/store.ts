@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { defaults, validateSettings, parsePalettes, type Settings, type RecordData, type HistorySample } from '../lib/domain';
+import { isMinutes, defaults, validateSettings, parsePalettes, type Settings, type RecordData, type HistorySample } from '../lib/domain';
 export const repo = process.cwd();
 export function resolveWorkspace(env: Record<string, string | undefined> = process.env, platform: NodeJS.Platform = process.platform, home = os.homedir()) {
     if (env.NEO_WORKSPACE)
@@ -132,28 +132,29 @@ export async function safeFile(id: string, parts: string[]) {
     if (!real.startsWith(base + path.sep))
         throw Error('リンク先のファイルは公開できません');
     const relative = path.relative(base, real).replaceAll('\\', '/');
-    if (!/^(index\.html|slides\.pptx|palette-comparison\.html|request\.md|material\.md|design\.md|check\.md|review\.md|preview\/[\w.-]+\.(png|jpg))$/.test(relative))
+    if (!/^(index\.html|slides\.pptx|palette-comparison\.html|request\.md|material\.md|design\.md|ledger\.md|minutes\.(md|pdf)|check\.md|review\.md|preview\/[\w.-]+\.(png|jpg))$/.test(relative))
         throw Error('このファイルは公開できません');
     return real;
 }
 export async function artifacts(r: RecordData) {
     const base = requestDir(r.id);
     const files: string[] = [];
-    for (const name of ['index.html', 'slides.pptx', 'palette-comparison.html']) {
+    for (const name of isMinutes(r.input) ? ['minutes.md', 'minutes.pdf', 'ledger.md'] : ['index.html', 'slides.pptx', 'palette-comparison.html']) {
         if (await fs.stat(path.join(base, name)).then(s => s.isFile() && s.size > 0).catch(() => false))
             files.push(name);
     }
     for (const name of await fs.readdir(path.join(base, 'preview')).catch(() => [])) {
-        if (/\.(png|jpg)$/.test(name))
+        if (!isMinutes(r.input) && /\.(png|jpg)$/.test(name))
             files.push('preview/' + name);
     }
     r.files = files;
+    if (isMinutes(r.input)) r.minutes = (await fs.readFile(path.join(base, 'minutes.md'), 'utf8').catch(() => '')).replace(/^\uFEFF/, '');
     for (const key of ['design', 'check', 'review'] as const) {
         // レビュー段階を通っていない（簡易版など）のに作るAIが review.md を書いた場合は、レビュー結果として扱わない
         if (key === 'review' && !r.reviewer) {
             r.review = '';
             continue;
         }
-        r[key] = (await fs.readFile(path.join(base, key + '.md'), 'utf8').catch(() => '')).replace(/^\uFEFF/, '');
+        r[key] = (await fs.readFile(path.join(base, (key === 'design' && isMinutes(r.input) ? 'ledger' : key) + '.md'), 'utf8').catch(() => '')).replace(/^\uFEFF/, '');
     }
 }

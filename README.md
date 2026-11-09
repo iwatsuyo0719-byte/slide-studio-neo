@@ -36,6 +36,8 @@ npm run dev
 
 素材に [question] を含めると質問、[error] を含めると本番の段階でエラーになります。「もう一方のAIで続ける」で保存済みの段階から進みます。AUTO は偽AIでは社外または素材600文字超を詳細、それ以外を簡易にする固定の判定です。実運用では作るAIが判断し、選んだ版と理由を返します。既定の段階待機は1秒、NEO_FAKE_DELAY_MS で変更できます。偽AIのpptx・検査・レビューは動作確認用で、資料品質の検証結果ではありません。
 
+目的の「議事録」は Markdown＋PDF（固定）で作り、配色は使いません。詳細版は台帳を確認してから議事録に進みます。PDFにはPCのChromeかEdgeを使います。見つからない時はMarkdownだけで完了し、画面に案内を出します。NEO_BROWSER にブラウザ実行ファイルのパスを指定でき、NEO_BROWSER=none でPDFなしの動作を確認できます。
+
 ## 設定・保存
 
 - 作業場所の既定値は Windows では `%LOCALAPPDATA%\slide-studio-neo`、それ以外では `$XDG_DATA_HOME/slide-studio-neo`（未設定なら `~/.local/share/slide-studio-neo`）です。環境変数 `NEO_WORKSPACE` で変更でき、相対パスはサーバー起動時の作業ディレクトリ（process.cwd()）から解決します。

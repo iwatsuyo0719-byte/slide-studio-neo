@@ -13,13 +13,14 @@ declare global {
         };
     }
 }
-export default function PalettePanel({ palettes, value, brand, onChange, onBrand, disabled }: {
+export default function PalettePanel({ palettes, value, brand, onChange, onBrand, disabled, unavailableReason }: {
     palettes: Palette[];
     value: string;
     brand: string;
     onChange: (id: string) => void;
     onBrand: (s: string) => void;
     disabled: boolean;
+    unavailableReason?: string;
 }) {
     const [group, setGroup] = useState('すべて');
     const [preview, setPreview] = useState<{ p?: Palette; id: string; name: string; anchor: HTMLButtonElement } | null>(null);
@@ -134,7 +135,7 @@ export default function PalettePanel({ palettes, value, brand, onChange, onBrand
         }
         return () => { clearTimeout(previewTimer.current); alive = false; cancelAnimationFrame(raf); ticker?.remove(tick); reduce.removeEventListener('change', media); };
     }, [group, disabled]);
-    const card = (p: Palette | undefined, id: string, name: string, clone = false) => <button key={id} type="button" className={'palette-card ' + (value === id ? 'selected' : '')} aria-pressed={value === id} tabIndex={clone ? -1 : 0} disabled={disabled}
+    const card = (p: Palette | undefined, id: string, name: string, clone = false) => <button key={id} type="button" className={'palette-card ' + (value === id ? 'selected' : '')} aria-pressed={value === id} tabIndex={clone || disabled ? -1 : 0} disabled={disabled}
         onMouseEnter={e => showPreview(e.currentTarget, p, id, name)}
         onMouseLeave={e => { if (!containsTarget(popup.current, e.relatedTarget)) hidePreview(); }}
         onFocus={e => {
@@ -154,9 +155,9 @@ export default function PalettePanel({ palettes, value, brand, onChange, onBrand
         onBlur={() => { drag.current.focus = false; hidePreview(); }}
         onClick={() => { if (!drag.current.moved) onChange(id); }}
         aria-label={p ? `${id} ${name}。${p.mood}。${p.group}。${p.colors.join('、')}` : `${name}。${description(id)}`}
-        title={p ? `${id} ${name}：${p.mood}（${p.group}） ${p.colors.join(' ')}` : `${name}：${description(id)}`}
+        title={disabled ? undefined : p ? `${id} ${name}：${p.mood}（${p.group}） ${p.colors.join(' ')}` : `${name}：${description(id)}`}
         data-palette={clone ? undefined : id}><span className="color-bar">{p ? p.colors.map(c => <i key={c} style={{ background: c }}/>) : <span>{id === 'auto' ? '✦' : '#______'}</span>}</span><small>{id === 'auto' ? 'AUTO' : id === 'brand' ? 'HEX' : id}</small><span>{name}</span></button>;
-    return <section className={'palette-panel ' + (disabled ? 'locked' : '')} aria-label="配色"><div className="palette-head"><h2><b className="number">6</b>配色 <small>ドラッグで流せます</small></h2><div className="palette-tabs" aria-label="配色の系統">{['すべて', ...groups].map(g => <button key={g} className={g === group ? 'on' : ''} aria-pressed={g === group} disabled={disabled} onClick={() => setGroup(g)}>{g}</button>)}</div><span className="spacer"/><span className="hint selection">選択中：{selected ? selected.id + ' ' + selected.name : value === 'auto' ? 'おまかせ' : 'ブランド色'}</span></div>
+    return <section className={'palette-panel ' + (disabled ? 'locked' : '')} aria-label="配色" aria-disabled={disabled}><div className="palette-head"><h2><b className="number">6</b>配色 <small>{unavailableReason || 'ドラッグで流せます'}</small></h2><div className="palette-tabs" aria-label="配色の系統">{['すべて', ...groups].map(g => <button key={g} className={g === group ? 'on' : ''} aria-pressed={g === group} disabled={disabled} onClick={() => setGroup(g)}>{g}</button>)}</div><span className="spacer"/><span className="hint selection">選択中：{selected ? selected.id + ' ' + selected.name : value === 'auto' ? 'おまかせ' : 'ブランド色'}</span></div>
  <div className="marquee" ref={viewport} tabIndex={disabled ? -1 : 0} role="region" aria-label="配色パネル。ドラッグか左右キーで動かせます" onFocus={() => { drag.current.focus = true; }} onBlur={e => {
             if (!e.currentTarget.contains(e.relatedTarget as Node))
                 drag.current.focus = false;

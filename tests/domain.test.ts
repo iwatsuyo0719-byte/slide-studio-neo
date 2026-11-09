@@ -9,9 +9,38 @@ const input: Input = { title: '試験', audience: '社外', purpose: '提案', f
 const palettes = parsePalettes(await fs.readFile('references/palettes/PALETTES_100.md', 'utf8'));
 test('配色100組・4系統・既定026・5色を原本から読む', () => { assert.equal(palettes.length, 100); assert.equal(new Set(palettes.map(p => p.group)).size, 4); assert.equal(palettes.find(p => p.id === '026')!.name, '浅瀬アクア'); assert.deepEqual(palettes.find(p => p.id === '026')!.colors, ['#F0FDFF', '#C1EFF1', '#74D3D8', '#32A5B1', '#225966']); assert.ok(palettes.every(p => p.colors.length === 5)); assert.throws(() => parsePalettes('')); });
 for (const purpose of Object.keys(purposes) as Input['purpose'][]) {
-    test('依頼文：' + purpose + '・読み手・版・配色・5行+2行', () => { const text = requestText({ ...input, purpose }, palettes, ['試験.pdf']); assert.equal(text.trim().split('\n').length, 7); assert.match(text, /読み手：社外。敬体/); assert.ok(text.includes(purposes[purpose].structure)); assert.match(text, /版：詳細/); assert.match(text, /026 浅瀬アクア/); assert.match(text, /試験.pdf/); });
+    test('依頼文：' + purpose + '・読み手・版・配色・5行+2行', () => { const text = requestText({ ...input, purpose }, palettes, ['試験.pdf']); assert.equal(text.trim().split('\n').length, 7); assert.match(text, /読み手：社外。敬体/); assert.ok(text.includes(purposes[purpose].structure)); assert.match(text, /版：詳細/); assert.match(text, purpose === '議事録' ? /使わない（議事録）/ : /026 浅瀬アクア/); assert.match(text, /試験.pdf/); });
 }
 test('おまかせ・ブランド・AUTOも依頼文へ渡す', () => { assert.match(requestText({ ...input, palette: 'auto', level: 'AUTO' }, palettes), /近い3組/); assert.match(requestText({ ...input, palette: 'brand' }, palettes), /#225966/); });
+
+test('議事録：配色を無視・依頼文と形式に依存しない専用目安', () => {
+    const i: Input = { ...input, title: '', purpose: '議事録', palette: 'brand', brand: 'invalid' };
+    assert.equal(validateInput(i, defaults).brand, '');
+    assert.doesNotThrow(() => validateInput({ ...i, brand: null, palette: null }, defaults));
+    assert.throws(() => validateInput({ ...i, formats: ['pdf'] }, defaults));
+    const text = requestText(i, palettes);
+    assert.match(text, /素材から会議名を決めて議事録を作る/);
+    assert.match(text, /出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る/);
+    assert.doesNotMatch(text, /invalid|近い3組|スライド/);
+    assert.match(historyKey(i, '簡易'), /\|minutes$/);
+    assert.notEqual(historyKey(i, '簡易'), historyKey(input, '簡易'));
+    assert.equal(historyKey(i, '詳細'), historyKey({ ...i, formats: ['pptx', 'html'] }, '詳細'));
+    assert.deepEqual(estimate(i, '簡易', 'design'), [2 * 60000, 5 * 60000]);
+    assert.deepEqual(estimate(i, '簡易', 'production'), [6 * 60000, 10 * 60000]);
+    assert.deepEqual(estimate(i, '詳細', 'design'), [4 * 60000, 8 * 60000]);
+    assert.deepEqual(estimate(i, '詳細', 'production'), [15 * 60000, 25 * 60000]);
+    const key = historyKey(i, '詳細');
+    assert.deepEqual(estimate(i, '詳細', 'production', [60, 120, 300].map(ms => ({ key, phase: 'production' as const, ms }))), [96, 144]);
+    for (const level of ['簡易', '詳細'] as const) {
+        const stages = level === '簡易' ? ['本番', '検査'] : ['本番', '検査', 'レビュー', '手直し'];
+        let previous = -1;
+        for (const stage of stages) {
+            const r = { input: i, status: 'running', stage, phase: 'production', selectedLevel: level, stageStart: 100, phaseStart: 100, activeMs: 0 } as RecordData;
+            const p = progress(r, 100, [100, 200]).percent;
+            assert.ok(p > previous && p < 100); previous = p;
+        }
+    }
+});
 test('サブスク専用：環境変数4種を大小文字とも取り除く', () => { const env = subscriptionEnv({ ANTHROPIC_API_KEY: 'a', OPENAI_API_KEY: 'b', CODEX_API_KEY: 'c', ANTHROPIC_AUTH_TOKEN: 'd', openai_api_key: 'e', PATH: 'ok' }); assert.deepEqual(env, { PATH: 'ok' }); });
 test('品質下限・自動深さ・レビューhigh以上', () => { assert.deepEqual(allowedModels(defaults, 'claude'), ['opus', 'fable']); assert.deepEqual(allowedModels(defaults, 'codex'), ['gpt-6.1-sol', 'gpt-5.6-sol']); assert.ok(!allowedDepths(defaults, 'codex', true).includes('medium')); assert.equal(effectiveAI(input.ai, '簡易').depth, 'medium'); assert.equal(effectiveAI(input.ai, '詳細').depth, 'high'); assert.equal(effectiveAI({ ...input.ai, depth: 'medium' }, '簡易', defaults, true).depth, 'high'); assert.throws(() => validateSettings({ ...defaults, reviewMinimum: 'medium' })); assert.throws(() => validateInput({ ...input, ai: { ...input.ai, model: 'small' } }, defaults)); assert.throws(() => validateInput({ ...input, palette: 'brand', brand: 'wrong' }, defaults)); });
 test('実績3件から組み合わせ別の中央値を使う', () => { const key = historyKey(input, '詳細'); assert.deepEqual(estimate(input, '詳細', 'design'), [240000, 480000]); assert.deepEqual(estimate(input, '詳細', 'design', [{ key, phase: 'design', ms: 60000 }, { key, phase: 'design', ms: 120000 }]), [240000, 480000]); assert.deepEqual(estimate(input, '詳細', 'design', [60000, 120000, 300000].map(ms => ({ key, phase: 'design' as const, ms }))), [96000, 144000]); assert.notEqual(historyKey({ ...input, ai: { ...input.ai, depth: 'max' } }, '詳細'), key); assert.deepEqual(estimate({ ...input, formats: ['pptx', 'html'] }, '詳細', 'production'), [2400000, 3900000]); });
