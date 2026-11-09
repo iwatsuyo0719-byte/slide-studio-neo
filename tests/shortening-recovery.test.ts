@@ -71,7 +71,7 @@ for (const mode of ['shorten-failure', 'shorten-abort', 'pdf-failure', 'pdf-abor
             assert.equal(completed.minutesShortened, true);
             assert.equal(completed.pdfNote, undefined);
             assert.equal(completed.pdfPages, 4);
-            assert.equal(completed.pdfPageNote, 'PDFは 4 枚です（目安1〜2枚）');
+            assert.equal(completed.pdfPageNote, 'PDFは 4 枚です（目安2〜3枚）');
             assert.ok(completed.files.includes('minutes.pdf'));
             assert.match(completed.reviewNote!, /手直しを省略/);
             const dir = requestDir(id);
