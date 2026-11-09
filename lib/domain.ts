@@ -149,13 +149,13 @@ export function estimate(i: Input, level: Level, phase: 'design' | 'production',
         const med = samples.length % 2 ? samples[mid] : (samples[mid - 1] + samples[mid]) / 2;
         return [med * .8, med * 1.2];
     }
-    const html = i.formats.includes('html');
+    // 2026-11-09 実測1件（簡易HTML：設計図4分・本番16分・検査10分）から更新。
     let mins: [
         number,
         number
-    ] = level === '詳細' ? (phase === 'design' ? [3, 5] : html ? [9, 15] : [8, 14]) : html ? [5, 8] : [4, 7];
+    ] = level === '詳細' ? (phase === 'design' ? [4, 8] : [35, 60]) : [20, 35];
     if (level === 'AUTO')
-        mins = [4, html ? 20 : 19];
+        mins = phase === 'design' ? [4, 35] : [20, 60];
     if (i.formats.length === 2 && phase === 'production')
         mins = [mins[0] + 5, mins[1] + 5];
     return [mins[0] * 60000, mins[1] * 60000];
@@ -169,7 +169,8 @@ export function progress(r: RecordData, now: number, range: [
     if (r.status === 'design')
         return { percent: 99, remaining: 0, overtime: false };
     const stages: Stage[] = r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
-    const weights = r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [.55, .12, .2, .13] : [.8, .2];
+    // 設計図は別メーター。本番:検査は実測16:10、詳細のレビュー8分・手直し8分は推定。
+    const weights = r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
     const index = Math.max(0, stages.indexOf(r.stage));
     const base = weights.slice(0, index).reduce((a, b) => a + b, 0);
     const elapsed = Math.max(0, (r.status === 'running' ? now : r.updated) - r.stageStart);

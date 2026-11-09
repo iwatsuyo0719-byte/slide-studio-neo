@@ -1,3 +1,4 @@
+import './workspace';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -13,7 +14,7 @@ for (const purpose of Object.keys(purposes) as Input['purpose'][]) {
 test('おまかせ・ブランド・AUTOも依頼文へ渡す', () => { assert.match(requestText({ ...input, palette: 'auto', level: 'AUTO' }, palettes), /近い3組/); assert.match(requestText({ ...input, palette: 'brand' }, palettes), /#225966/); });
 test('サブスク専用：環境変数4種を大小文字とも取り除く', () => { const env = subscriptionEnv({ ANTHROPIC_API_KEY: 'a', OPENAI_API_KEY: 'b', CODEX_API_KEY: 'c', ANTHROPIC_AUTH_TOKEN: 'd', openai_api_key: 'e', PATH: 'ok' }); assert.deepEqual(env, { PATH: 'ok' }); });
 test('品質下限・自動深さ・レビューhigh以上', () => { assert.deepEqual(allowedModels(defaults, 'claude'), ['opus', 'fable']); assert.deepEqual(allowedModels(defaults, 'codex'), ['gpt-6.1-sol', 'gpt-5.6-sol']); assert.ok(!allowedDepths(defaults, 'codex', true).includes('medium')); assert.equal(effectiveAI(input.ai, '簡易').depth, 'medium'); assert.equal(effectiveAI(input.ai, '詳細').depth, 'high'); assert.equal(effectiveAI({ ...input.ai, depth: 'medium' }, '簡易', defaults, true).depth, 'high'); assert.throws(() => validateSettings({ ...defaults, reviewMinimum: 'medium' })); assert.throws(() => validateInput({ ...input, ai: { ...input.ai, model: 'small' } }, defaults)); assert.throws(() => validateInput({ ...input, palette: 'brand', brand: 'wrong' }, defaults)); });
-test('実績3件から組み合わせ別の中央値を使う', () => { const key = historyKey(input, '詳細'); assert.deepEqual(estimate(input, '詳細', 'design'), [180000, 300000]); assert.deepEqual(estimate(input, '詳細', 'design', [{ key, phase: 'design', ms: 60000 }, { key, phase: 'design', ms: 120000 }]), [180000, 300000]); assert.deepEqual(estimate(input, '詳細', 'design', [60000, 120000, 300000].map(ms => ({ key, phase: 'design' as const, ms }))), [96000, 144000]); assert.notEqual(historyKey({ ...input, ai: { ...input.ai, depth: 'max' } }, '詳細'), key); assert.deepEqual(estimate({ ...input, formats: ['pptx', 'html'] }, '詳細', 'production'), [840000, 1200000]); });
+test('実績3件から組み合わせ別の中央値を使う', () => { const key = historyKey(input, '詳細'); assert.deepEqual(estimate(input, '詳細', 'design'), [240000, 480000]); assert.deepEqual(estimate(input, '詳細', 'design', [{ key, phase: 'design', ms: 60000 }, { key, phase: 'design', ms: 120000 }]), [240000, 480000]); assert.deepEqual(estimate(input, '詳細', 'design', [60000, 120000, 300000].map(ms => ({ key, phase: 'design' as const, ms }))), [96000, 144000]); assert.notEqual(historyKey({ ...input, ai: { ...input.ai, depth: 'max' } }, '詳細'), key); assert.deepEqual(estimate({ ...input, formats: ['pptx', 'html'] }, '詳細', 'production'), [2400000, 3900000]); });
 test('100%は完了だけ・超過・停止時は固定', () => { const r = { status: 'running', stage: '手直し', phase: 'production', selectedLevel: '詳細', stageStart: 0, phaseStart: 0, activeMs: 0 } as RecordData; assert.ok(progress(r, 99999999, [100, 200]).percent < 100); assert.equal(progress(r, 99999999, [100, 200]).overtime, true); assert.equal(progress({ ...r, status: 'done' }, 99999999, [100, 200]).percent, 100); assert.deepEqual(progress({ ...r, status: 'design' }, 1000, [100, 200]), progress({ ...r, status: 'design' }, 9000, [100, 200])); });
 test('CLI引数：Codex read-only、stdin終了はexecuteでignore、Claude許可を限定', () => { const a = cliArgs(input.ai, '詳細', defaults, 'C:/req', 'test', true, 'C:/prompts'); assert.ok(a.includes('read-only')); assert.ok(a.includes('model_reasoning_effort=high')); const b = cliArgs({ provider: 'claude', model: 'opus', depth: 'auto' }, '詳細', defaults, 'C:/req', 'test', false, 'C:/prompts'); assert.ok(b.includes('Read(C:/prompts/**)')); assert.ok(!b.includes('--dangerously-skip-permissions')); });
 test('偽pptxはOOXMLのzipを生成する', () => { const bytes = fakePptx(); assert.equal(bytes.readUInt32LE(0), 0x04034b50); assert.ok(bytes.includes(Buffer.from('ppt/slides/slide1.xml'))); assert.ok(bytes.includes(Buffer.from('SLIDE STUDIO NEO'))); });
@@ -28,4 +29,20 @@ test('AIが書いたBOM付きJSONも読める', async () => {
     await fs.writeFile(file, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"level":"詳細"}', 'utf16le')]));
     assert.deepEqual(await jsonRead(file, null), { level: '詳細' });
     await fs.rm(path.dirname(file), { recursive: true, force: true });
+});
+
+
+test('実測に基づく初期目安は両形式で一致する', () => {
+    for (const format of ['pptx', 'html'] as const) {
+        const i = { ...input, formats: [format] };
+        assert.deepEqual(estimate(i, '簡易', 'production'), [20 * 60000, 35 * 60000]);
+        assert.deepEqual(estimate(i, '詳細', 'design'), [4 * 60000, 8 * 60000]);
+        assert.deepEqual(estimate(i, '詳細', 'production'), [35 * 60000, 60 * 60000]);
+    }
+});
+
+test('検査開始時の進捗は本番16分・検査10分の比率を反映する', () => {
+    const r = { status: 'running', stage: '検査', phase: 'production', selectedLevel: '簡易', stageStart: 100, phaseStart: 100, activeMs: 0 } as RecordData;
+    assert.equal(progress(r, 100, [20 * 60000, 35 * 60000]).percent, 61);
+    assert.equal(progress({ ...r, selectedLevel: '詳細' }, 100, [35 * 60000, 60 * 60000]).percent, 38);
 });

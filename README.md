@@ -38,7 +38,9 @@ npm run dev
 
 ## 設定・保存
 
-- 設定は workspace/settings.json、依頼は workspace/requests/YYYY-MM-DD-題名-ID/、実績は workspace/history.json（偽AIは history.fake.json）に保存します。すべて Git の対象外です。
+- 作業場所の既定値は Windows では `%LOCALAPPDATA%\slide-studio-neo`、それ以外では `$XDG_DATA_HOME/slide-studio-neo`（未設定なら `~/.local/share/slide-studio-neo`）です。環境変数 `NEO_WORKSPACE` で変更でき、相対パスはサーバー起動時の作業ディレクトリ（process.cwd()）から解決します。
+- 作業場所の中に settings.json、requests/YYYY-MM-DD-題名-ID/、history.json（偽AIは history.fake.json）を保存します。
+- 旧版で作った依頼は repo の workspace/requests/ にあります。自動移行はしないため、必要なら新しい場所の requests/ へ手で移してください。
 - 各依頼には request.md（5行＋版・配色）、material.md、attachments/、design.md、成果物（slides.pptx / index.html）、check.md、review.md（詳細だけ）、revision.md、run.log、state.json が残ります。
 - 簡易は設計図で止めず制作・自己検査。詳細は設計図承認後に制作・自己検査・別起動のCodexレビュー・作ったAIによる1周の手直し。Codexが利用できない場合だけClaudeへ代替し、Codexレビュー未実施を記録します。
 - 詳細版の設計図は右端パネルで確認します。×で畳むとつまみから再表示できます。おまかせ配色では3組から選びます。
@@ -69,7 +71,7 @@ npm run lint
 npm test
 ~~~
 
-lint は TypeScript の型検査です。単体・段階実行テストは偽AIを使い、実CLIの生成を呼びません。テスト用の依頼は workspace/ に残します。
+lint は TypeScript の型検査です。単体・段階実行テストは偽AIを使い、実CLIの生成を呼びません。テスト実行時は NEO_WORKSPACE を os.tmpdir() 配下の一時フォルダに切り替え、利用者の作業場所を汚しません。
 
 HTTPとブラウザのテストは、別ターミナルで次の偽AIサーバーを起動してから実行します。
 
@@ -84,7 +86,7 @@ npm run test:http
 npm run test:browser
 ~~~
 
-ブラウザテストはインストール済みChromeの独立したヘッドレスプロファイルを使います。必要なら CHROME_PATH と NEO_TEST_URL を設定してください。成功時の画像は workspace/verification/ に保存します。実際のChromeセッション・プロファイルを操作しません。
+ブラウザテストはインストール済みChromeの独立したヘッドレスプロファイルを test-results/ 配下に作って使います。必要なら CHROME_PATH と NEO_TEST_URL を設定してください。成功時の画像は test-results/verification/ に保存します。実際のChromeセッション・プロファイルを操作しません。
 
 ## 検証記録（2026-11-08）
 

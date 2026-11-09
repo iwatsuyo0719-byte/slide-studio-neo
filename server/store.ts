@@ -1,8 +1,17 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { defaults, validateSettings, parsePalettes, type Settings, type RecordData, type HistorySample } from '../lib/domain';
 export const repo = process.cwd();
-export const workspace = path.join(repo, 'workspace');
+export function resolveWorkspace(env: Record<string, string | undefined> = process.env, platform: NodeJS.Platform = process.platform, home = os.homedir()) {
+    if (env.NEO_WORKSPACE)
+        return path.resolve(env.NEO_WORKSPACE);
+    const dataHome = platform === 'win32'
+        ? env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
+        : env.XDG_DATA_HOME || path.join(home, '.local', 'share');
+    return path.resolve(dataHome, 'slide-studio-neo');
+}
+export const workspace = resolveWorkspace();
 export const requests = path.join(workspace, 'requests');
 export async function jsonRead<T>(file: string, fallback: T): Promise<T> {
     for (let attempt = 0;; attempt++) {

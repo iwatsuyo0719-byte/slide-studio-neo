@@ -9,7 +9,7 @@ const chrome = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Applic
 test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定まで通す', { timeout: 180000 }, async () => {
     const bootstrap = await fetch(base + '/api/neo').then(r => r.json());
     assert.equal(bootstrap.fake, true, '実AIでは実行しません');
-    const profile = path.resolve('workspace/browser-test-' + crypto.randomUUID());
+    const profile = path.resolve('test-results/browser-test-' + crypto.randomUUID());
     await fs.mkdir(profile, { recursive: true });
     const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--disable-software-rasterizer', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--window-size=1280,720', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
@@ -80,9 +80,9 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('document.querySelectorAll("[data-palette]").length'), 102);
         assert.equal(await evaluate('document.querySelector("[data-palette].selected").getAttribute("aria-pressed")'), 'true');
         assert.equal(await evaluate("(()=>{" + label + "return [...document.querySelectorAll('button')].find(b=>label(b)==='作成する').disabled})()"), true);
-        await fs.mkdir('workspace/verification', { recursive: true });
+        await fs.mkdir('test-results/verification', { recursive: true });
         const shot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('workspace/verification/input-1280.png', Buffer.from(shot.data, 'base64'));
+        await fs.writeFile('test-results/verification/input-1280.png', Buffer.from(shot.data, 'base64'));
         await material('架空の週次報告です。今週は計画を確認し、来週の担当を決めます。');
         await click('html');
         await click('pptx');
@@ -99,14 +99,14 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('設計図を確認');
         await wait("document.querySelector('.design-drawer')");
         const designShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('workspace/verification/design-1280.png', Buffer.from(designShot.data, 'base64'));
+        await fs.writeFile('test-results/verification/design-1280.png', Buffer.from(designShot.data, 'base64'));
         await click('OKで本番へ');
         await wait("document.querySelector('.result-top')?.textContent.includes('できあがりました')");
         assert.ok(await evaluate("document.querySelector('iframe[title=成果物プレビュー]')?.getAttribute('sandbox')==='allow-scripts'"));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codex')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('workspace/verification/done-1280.png', Buffer.from(resultShot.data, 'base64'));
+        await fs.writeFile('test-results/verification/done-1280.png', Buffer.from(resultShot.data, 'base64'));
         await click('履歴');
         await wait("document.querySelector('.history-list button')");
         assert.ok(await evaluate("document.querySelector('.history-list').textContent.includes('完了')"));
