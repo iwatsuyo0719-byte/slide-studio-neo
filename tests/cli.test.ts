@@ -1,7 +1,12 @@
 import './workspace';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execute } from '../server/cli';
+import { execute, sandboxFailed } from '../server/cli';
+test('サンドボックスの起動失敗をレビュー失敗として見分ける', () => {
+    assert.equal(sandboxFailed('exited -1 in 0ms:\nFailed to create unified exec process: CreateProcessWithLogonW failed: 1909'), true);
+    assert.equal(sandboxFailed('runner failed during SpawnChild: CreateProcessAsUserW failed: 5'), true);
+    assert.equal(sandboxFailed('## 総合判定：おおむね良好\n指摘は2件です。'), false);
+});
 test('実際の子プロセスでもAPI環境変数を外しstdinを閉じる', async () => {
     const previous = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = 'NEO_TEST_DUMMY';

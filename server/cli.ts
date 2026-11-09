@@ -110,6 +110,8 @@ export function cliArgs(ai: AIChoice, level: Level, s: Settings, cwd: string, pr
     const tools = readOnly ? ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)'] : ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)', 'Write(' + cwd.replaceAll('\\', '/') + '/**)', 'Edit(' + cwd.replaceAll('\\', '/') + '/**)', ...(documentOnly ? [] : ['Bash(python build_slides.py)', 'Bash(python3 build_slides.py)'])];
     return ['-p', prompt, '--model', choice.model, '--effort', String(choice.depth), '--add-dir', cwd, '--add-dir', prompts, '--tools', readOnly ? 'Read' : documentOnly ? 'Read,Write,Edit' : 'Read,Write,Edit,Bash', '--allowedTools', ...tools, '--permission-mode', 'dontAsk'];
 }
+// Codex のWindowsサンドボックスがプロセスを起動できなかった時の出力（例：CreateProcessWithLogonW failed: 1909）。
+export function sandboxFailed(text: string) { return /CreateProcess(WithLogonW|AsUserW) failed|Failed to create unified exec process/.test(text); }
 export async function terminate(child: ChildProcess | undefined) {
     if (!child?.pid)
         return;

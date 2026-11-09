@@ -4,7 +4,7 @@ import type { ChildProcess } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isMinutes, requestTitle, requestText, validateInput, effectiveAI, historyKey, type Input, type RecordData, type Stage, type Provider } from '../lib/domain';
 import { repo, atomicText, requestDir, readRecord, save, settings, palettes, artifacts, sample, allRecords, jsonRead, safeFile } from './store';
-import { locate, execute, statuses, cliArgs, terminate } from './cli';
+import { locate, execute, statuses, cliArgs, terminate, sandboxFailed } from './cli';
 import { fakeStage } from './fake';
 import { createMinutesPDF, countPDFPages } from './pdf';
 type Job = {
@@ -95,7 +95,10 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, reviewer?: Pro
     let buffer = '';
     let last = 0;
     const since = Date.now();
+    let sandboxError = false;
     const output = await execute(command, cliArgs(ai, r.selectedLevel || r.input.level, s, dir, protocol, review, prompts, isMinutes(r.input)), dir, chunk => {
+        // 切り捨て前に判定する（stderr が長くなっても取りこぼさない）。チャンク境界をまたぐ分は直前の末尾と合わせて見る。
+        if (ai.provider === 'codex' && !sandboxError) sandboxError = sandboxFailed(buffer.slice(-200) + clean(chunk));
         buffer = (buffer + clean(chunk)).slice(-12000);
         if (Date.now() - last > 800) {
             last = Date.now();
@@ -106,6 +109,9 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, reviewer?: Pro
     await log(r, buffer || output);
     if (review) {
         if (!clean(output).trim()) throw Error('レビューの出力が得られませんでした');
+        // Codex のサンドボックスが起動できずファイルを読めなかった応答は、正常終了でもレビュー失敗として代替へ回す。
+        // Claude の代替レビューは run.log 等を引用しうるので判定しない（誤検知で代替まで失敗させないため）。
+        if (sandboxError) throw Error('レビュー用CLIのサンドボックスが起動できませんでした');
         await fs.writeFile(path.join(dir, 'review.md'), (r.reviewFallback && r.reviewer === 'claude' ? 'Codexレビュー未実施（Claude Codeで代替）\n\n' : '') + clean(output));
     }
     const required: Partial<Record<Stage, string[]>> = { 設計図: isMinutes(r.input) ? ['ledger.md'] : ['design.md', 'decision.json'], 本番: isMinutes(r.input) ? ['minutes.md'] : r.input.formats.map(f => f === 'html' ? 'index.html' : 'slides.pptx'), 検査: ['check.md'], レビュー: ['review.md'], 手直し: isMinutes(r.input) ? ['revision.md', 'minutes.md'] : ['revision.md'] };
