@@ -6,6 +6,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { locate, terminate, type Command } from './cli';
 import { markdownToHTML } from '../lib/markdown';
 
+// Chromium emits each page as an uncompressed /Type /Page object; /Pages is the tree.
+export function countPDFPages(bytes: Buffer | string): number {
+    const text = typeof bytes === 'string' ? bytes : bytes.toString('latin1');
+    return [...text.matchAll(/\/Type[\x00\t\n\f\r ]*\/Page(?=[\x00\t\n\f\r /<>\[\](){}%]|$)/g)].length;
+}
+
 export const PDF_NOTE = 'PDFは作れませんでした（Chrome か Edge が必要）';
 export const PDF_CONVERSION_NOTE = 'PDFは作れませんでした（議事録のPDF変換に失敗しました）';
 export const printCSS = `

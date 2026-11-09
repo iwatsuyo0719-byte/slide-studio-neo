@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createMinutesPDF, findBrowser, minutesHTML, PDF_NOTE, PDF_CONVERSION_NOTE } from '../server/pdf';
+import { createMinutesPDF, countPDFPages, findBrowser, minutesHTML, PDF_NOTE, PDF_CONVERSION_NOTE } from '../server/pdf';
 import { fakeMinutes } from '../server/fake';
 
 // Inspect only this process's temporary files, even when another test prints concurrently.
@@ -27,6 +27,13 @@ if (process.env.NEO_TEST_NO_SANDBOX === '1') {
     after(() => { mock.restoreAll(); syncBuiltinESMExports(); });
 }
 
+test('PDF：ページ辞書を数え、Pagesや名前の接尾辞を除く', () => {
+    assert.equal(countPDFPages('%PDF-1.7\n1 0 obj << /Type /Pages /Count 99 >> endobj\n2 0 obj << /Type /Page /Parent 1 0 R >> endobj\n3 0 obj <</Type/Page>> endobj\n4 0 obj << /Type\r\n /Page\r\n>> endobj'), 3);
+    assert.equal(countPDFPages(Buffer.from('/Type /Page /Type /Pages /Type /PageLabels /Type /PageExtra', 'latin1')), 1);
+    assert.equal(countPDFPages('/Type /Pages'), 0);
+    assert.equal(countPDFPages(''), 0);
+});
+
 test('PDF：指定の印刷書式とHTMLエスケープ', () => {
     const html = minutesHTML('# 会議\n\n<script>実行</script>');
     for (const value of ['size: A4 portrait; margin: 25mm 20mm', 'font-size: 16pt', 'font-size: 13pt', 'font-size: 10.5pt; line-height: 1.6', 'font-size: 10pt', 'font-size: 9pt', '"Yu Gothic", "YuGothic", "游ゴシック", "Hiragino Sans", "Noto Sans JP", sans-serif']) assert.ok(html.includes(value));
@@ -40,6 +47,7 @@ test('PDF：Chrome/Edgeで実際に印刷し、一時HTMLは依頼に残さな�
         await fs.writeFile(path.join(dir, 'minutes.md'), fakeMinutes);
         assert.equal(await createMinutesPDF(dir), undefined);
         assert.equal((await fs.readFile(path.join(dir, 'minutes.pdf'))).subarray(0, 4).toString(), '%PDF');
+        assert.ok(countPDFPages(await fs.readFile(path.join(dir, 'minutes.pdf'))) >= 1);
         assert.deepEqual((await fs.readdir(dir)).sort(), ['minutes.md', 'minutes.pdf']);
         assert.deepEqual((await fs.readdir(os.tmpdir())).filter(n => n.startsWith('neo-minutes-')).sort(), before.sort());
     } finally { await fs.rm(dir, { recursive: true, force: true }); }

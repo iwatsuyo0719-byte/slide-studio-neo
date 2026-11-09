@@ -32,12 +32,14 @@ export async function locate(name: string): Promise<Command | null> {
     }
     return null;
 }
-export function execute(command: Command, args: string[], cwd: string, onData?: (s: string) => void, onChild?: (c: ChildProcess) => void, signal?: AbortSignal, timeout = 0): Promise<string> {
+export function execute(command: Command, args: string[], cwd: string, onData?: (s: string) => void, onChild?: (c: ChildProcess) => void, signal?: AbortSignal, timeout = 0, stdoutOnly = false): Promise<string> {
+    if (signal?.aborted) return Promise.reject(Error('中断しました'));
     return new Promise((resolve, reject) => {
         const child = spawn(command.bin, [...command.prefix, ...args], { cwd, env: subscriptionEnv(process.env), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
         onChild?.(child);
         const abort = () => { void terminate(child); };
         signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) abort();
         let out = '', err = '';
         const timer = timeout ? setTimeout(() => { child.kill(); reject(Error('CLI確認がタイムアウトしました')); }, timeout) : undefined;
         child.stdout?.on('data', d => { const s = String(d); out = (out + s).slice(-200000); onData?.(s); });
@@ -50,7 +52,7 @@ export function execute(command: Command, args: string[], cwd: string, onData?: 
                 return reject(Error('中断しました'));
             if (code !== 0)
                 return reject(Error(('CLIが停止しました（終了コード ' + code + '）。' + err + ' ' + out).slice(-4000)));
-            resolve(out || err);
+            resolve(stdoutOnly ? out : out || err);
         });
     });
 }

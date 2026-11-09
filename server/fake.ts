@@ -75,11 +75,13 @@ export const fakeMinutes = `# 週次会議 議事録（偽AIの見本）
 未確認事項
 - 日時、参加者の所属・氏名、記録者、担当、期限、見込額、次回日時。
 `;
-export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal: AbortSignal) {
+export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal: AbortSignal, shorten = false) {
     await delay(Number(process.env.NEO_FAKE_DELAY_MS || 1000), undefined, { signal });
     const put = (name: string, s: string | Buffer) => fs.writeFile(path.join(dir, name), s);
     if (r.input.material.includes('[error]') && r.attempt === 0 && stage === '本番')
         throw Error('偽AI：利用上限に達しました。もう一方のAIで続けられます');
+    if (stage === 'レビュー' && (r.input.material.includes('[review-error]') && r.reviewer === 'codex' || r.input.material.includes('[review-both-error]')))
+        throw Error('偽AI：' + r.reviewer + ' レビューの起動に失敗しました');
     if (stage === '設計図') {
         if (!isMinutes(r.input) && r.input.material.includes('[question]') && !r.asked) {
             await put('question.json', JSON.stringify({ text: 'どの期間を対象にしますか？', options: ['A：今月', 'B：今四半期', 'C：未定のまま進める'] }));
@@ -99,13 +101,16 @@ export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal
         }
     }
     else if (isMinutes(r.input)) {
-        if (stage === '本番') await put('minutes.md', fakeMinutes);
+        if (stage === '本番') await put('minutes.md', r.input.material.includes('[long]') ? fakeMinutes.replace('計画の確認方法を話し合った。', '計画の確認方法を話し合った。' + '議論の経緯を記録する。'.repeat(700)) : fakeMinutes);
         else if (stage === '検査') await put('check.md', '# 自己検査（偽AI）\n構成5項目の順序：見本で確認\n宿題の表（担当・内容・期限）：確認\n素材にない数値：xxを使用（実素材との照合は未達）\n相手の発言：「」の引用（実素材との照合は未達）\n不明点：本文と末尾に未確認を明示\n分量：短い見本（実会議の分量は未確認）\n');
-        else if (stage === 'レビュー') await put('review.md', '# Codexレビュー（偽AI）\n総合判定：動作確認用\n素材との食い違い・決定と宿題の取り違え・経緯の飛躍・未確認の付け忘れ：実素材での検証は未確認\n');
+        else if (stage === 'レビュー') await put('review.md', (r.reviewFallback ? 'Codexレビュー未実施（Claude Codeで代替）\n\n' : '') + '# ' + (r.reviewer === 'claude' ? 'Claude Code' : 'Codex') + 'レビュー（偽AI）\n総合判定：動作確認用\n素材との食い違い・決定と宿題の取り違え・経緯の飛躍・未確認の付け忘れ：実素材での検証は未確認\n');
         else if (stage === '手直し') {
             const feedback = await fs.readFile(path.join(dir, 'final-feedback.md'), 'utf8').catch(() => '');
-            await put('minutes.md', (await fs.readFile(path.join(dir, 'minutes.md'), 'utf8')) + '\n注：偽AIで1周の手直しを確認済み。\n');
-            await put('revision.md', '偽AI：minutes.md を1周修正しました。実素材との照合は未確認。\n' + feedback);
+            const latest = await fs.readFile(path.join(dir, 'minutes.md'), 'utf8');
+            await put('minutes.md', shorten ? latest.replace(/(?:議論の経緯を記録する。)+/g, '議論の経緯を記録する。'.repeat(r.input.material.includes('[shorten-ok]') ? 1 : 350)) : latest + '\n注：偽AIで1周の手直しを確認済み。\n');
+            if (shorten) await put('check.md', (await fs.readFile(path.join(dir, 'check.md'), 'utf8')) + '\n分量の自動短縮：1回。決定事項・宿題・未確認事項を保持。\n');
+            if (shorten) await fs.appendFile(path.join(dir, 'revision.md'), '\n偽AI：論点と経緯の自動短縮を1回実施しました。\n');
+            else await put('revision.md', '偽AI：minutes.md を1周修正しました。実素材との照合は未確認。\n' + feedback);
         }
     }
     else if (stage === '本番') {
@@ -117,7 +122,7 @@ export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal
     else if (stage === '検査')
         await put('check.md', '# 自己検査（偽AI）\n見出し・はみ出し・重なり・最小文字・空白：テスト出力\n数字の出所：未達（実素材の検証はしていません）\n改善案：実データの出所と対象期間を補う\n');
     else if (stage === 'レビュー')
-        await put('review.md', '# Codexレビュー（偽AI）\n総合判定：動作確認用\n1枚目／中／数値が見本／実データで確認する\n');
+        await put('review.md', (r.reviewFallback ? 'Codexレビュー未実施（Claude Codeで代替）\n\n' : '') + '# ' + (r.reviewer === 'claude' ? 'Claude Code' : 'Codex') + 'レビュー（偽AI）\n総合判定：動作確認用\n1枚目／中／数値が見本／実データで確認する\n');
     else if (stage === '手直し')
         await put('revision.md', '偽AI：1周の手直し・修正後確認を模擬しました。\n');
 }

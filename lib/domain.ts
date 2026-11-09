@@ -40,6 +40,10 @@ export interface Question {
 export interface RecordData {
     minutes?: string;
     pdfNote?: string;
+    pdfPages?: number;
+    pdfPageNote?: string;
+    minutesShortened?: boolean;
+    reviewNote?: string;
     fake?: boolean;
     id: string;
     title: string;

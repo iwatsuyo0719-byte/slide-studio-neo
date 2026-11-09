@@ -36,7 +36,11 @@ npm run dev
 
 素材に [question] を含めると質問、[error] を含めると本番の段階でエラーになります。「もう一方のAIで続ける」で保存済みの段階から進みます。AUTO は偽AIでは社外または素材600文字超を詳細、それ以外を簡易にする固定の判定です。実運用では作るAIが判断し、選んだ版と理由を返します。既定の段階待機は1秒、NEO_FAKE_DELAY_MS で変更できます。偽AIのpptx・検査・レビューは動作確認用で、資料品質の検証結果ではありません。
 
+偽AIの素材に `[long]` を入れると長い議事録を作り、PDFが作成できた場合は4枚として短縮経路を再現します。`[shorten-ok]` も入れると経緯を短くし、作り直したPDFの実枚数を使います。`[review-error]` でCodexレビュー失敗→Claude Codeへ切り替え、`[review-both-error]` で両レビュー失敗→手直しを省略して完了する経路を再現できます（議事録・詳細スライド共通）。
+
 目的は「提案・報告・説明・研修・議事録」の順です（説明・研修は1つの選択肢）。議事録は出力形式が「Markdown＋PDF（固定）」、レベルが「詳細・止まらず完成まで（固定）」になり、配色は使いません。台帳→議事録→自己検査→新しく起動したCodexのread-onlyレビュー→1周の手直し→PDFまで自動で進みます。目安は約15〜25分（仮）です。台帳は完了画面の「台帳を読む」から確認できます。PDFにはPCのChromeかEdgeを使います。見つからない時はMarkdownだけで完了し、画面に案内を出します。NEO_BROWSER にブラウザ実行ファイルのパスを指定でき、NEO_BROWSER=none でPDFなしの動作を確認できます。
+
+議事録の本文は1時間の会議で約3,500字を目安に指示します。生成の最後にPDFを数え、3枚を超えたら最新の minutes.md の論点と経緯を1回だけ短縮します。決定事項・宿題・未確認事項は削らない指示です。短縮後も3枚を超える場合は止めず、画面とログに枚数を表示します。完了後の手動保存・AI修正では枚数の更新だけを行い、自動短縮しません。PDFを作れない場合は枚数確認を省略します。
 
 完了画面の「表示／編集」で議事録のMarkdownを直接編集できます。「保存してPDFを作り直す」で正本を保存し、PDFを再作成します。PDFを作れない場合もMarkdownを保存して理由を表示し、古いPDFは配布しません。保存は50万文字までで、生成中や他の処理中には行えません。AIへの直し指示（1周）も使え、手動保存とAIの直しはどちらを先にしても最新の保存済み minutes.md を元にします。旧版の台帳確認待ちは「OKで本番へ」で続けられます。
 
@@ -46,7 +50,7 @@ npm run dev
 - 作業場所の中に settings.json、requests/YYYY-MM-DD-題名-ID/、history.json（偽AIは history.fake.json）を保存します。
 - 旧版で作った依頼は repo の workspace/requests/ にあります。自動移行はしないため、必要なら新しい場所の requests/ へ手で移してください。
 - 各依頼には request.md（5行＋版・配色）、material.md、attachments/、design.md、成果物（slides.pptx / index.html）、check.md、review.md（詳細だけ）、revision.md、run.log、state.json が残ります。議事録では design.md の代わりに ledger.md、成果物は minutes.md と minutes.pdf（作成できる場合）です。
-- スライドは、簡易は設計図で止めず制作・自己検査。詳細は設計図承認後に制作・自己検査・別起動のCodexレビュー・作ったAIによる1周の手直し。Codexが利用できない場合だけClaudeへ代替し、Codexレビュー未実施を記録します。
+- スライドは、簡易は設計図で止めず制作・自己検査。詳細は設計図承認後に制作・自己検査・別起動のCodexレビュー・作ったAIによる1周の手直し。Codexが利用できない場合と実行中に失敗した場合は、新しく起動したread-onlyのClaude Codeへ代替し、Codexレビュー未実施を記録します。両方失敗した場合もレビューなし・手直し省略で完了し、その旨を表示します。ユーザーの中断時は切り替えません。
 - スライドの詳細版の設計図は右端パネルで確認します。×で畳むとつまみから再表示できます。おまかせ配色では3組から選びます。
 - 停止・失敗時もファイルを残します。「同じAIで再開」「もう一方のAIで続ける」は手動操作です。サーバー再起動後は履歴で停止扱いにし、同じモードで再開できます。偽AIの依頼を実CLIで再開することは拒否します。
 - 設定のAI・モデル・深さは保存した既定値です。上部の札では依頼だけ変更できます。深さの自動は簡易 medium / 詳細 high。モデル候補・下限は設定ファイルにあり、画面・サーバーの両方で品質下限を確認します。レビューの下限は high です。
@@ -93,6 +97,6 @@ npm run test:e2e
 
 ブラウザテストはインストール済みChromeの独立したヘッドレスプロファイルを test-results/ 配下に作って使います。必要なら CHROME_PATH と NEO_TEST_URL を設定してください。成功時の画像は test-results/verification/ に保存します。実際のChromeセッション・プロファイルを操作しません。
 
-制限付きのWindowsテストアカウントでChromeのレンダラーが起動せず `Page.enable` がタイムアウトする場合は、テスト実行側だけ `$env:NEO_TEST_NO_SANDBOX = "1"` を指定できます。単体のPDFテストとブラウザテストで起動する独立Chromeにだけ適用されます。ブラウザを自動検出できない場合は `$env:NEO_BROWSER = "C:/Program Files/Google/Chrome/Application/chrome.exe"` も指定してください。アプリ本体のPDF起動引数、iframeのsandbox、テストの判定は変えません。
+制限付きのWindowsテストアカウントでChromeのレンダラーが起動せず `Page.enable` がタイムアウトする場合は、テスト実行側だけ `$env:NEO_TEST_NO_SANDBOX = "1"` を指定できます。単体のPDFテストとブラウザテストで起動する独立Chromeにだけ適用されます。ブラウザを自動検出できない場合は `$env:NEO_BROWSER = "C:/Program Files/Google/Chrome/Application/chrome.exe"` も指定してください。アプリ本体のPDF起動引数、iframeのsandbox、テストの判定は変えません。偽AIサーバーのPDF印刷もこの制限で失敗する場合は、サーバー起動側にも `NEO_TEST_NO_SANDBOX=1` を設定し、`$env:NODE_OPTIONS = "--import=./tests/pdf-browser-hook.mjs"` を付けてから上記のdevコマンドを実行してください。このフックは偽AIかつ明示的なテスト設定時のPDF印刷だけに適用されます。テスト後は追加した環境変数を解除してください。
 
 ライセンス: MIT（[LICENSE](LICENSE)）。第三者ライブラリの扱いは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。制作規則の読む順は [prompts/README.md](prompts/README.md)。
