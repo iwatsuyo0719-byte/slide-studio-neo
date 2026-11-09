@@ -75,3 +75,13 @@ test('検査開始時の進捗は本番16分・検査10分の比率を反映す�
     assert.equal(progress(r, 100, [20 * 60000, 35 * 60000]).percent, 61);
     assert.equal(progress({ ...r, selectedLevel: '詳細' }, 100, [35 * 60000, 60 * 60000]).percent, 38);
 });
+
+test('議事録のCLIはスライド生成用のBash許可を渡さず、レビューは新規Codex read-only', () => {
+    const creator = cliArgs({ provider: 'claude', model: 'opus', depth: 'auto' }, '詳細', defaults, 'C:/req', '議事録', false, 'C:/prompts', true);
+    assert.ok(creator.includes('Read,Write,Edit'));
+    assert.doesNotMatch(creator.join(' '), /Bash|build_slides|pptx|preview/);
+    const reviewer = cliArgs({ provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' }, '詳細', defaults, 'C:/req', '独立レビュー', true, 'C:/prompts', true);
+    assert.equal(reviewer[0], 'exec');
+    assert.ok(reviewer.includes('read-only'));
+    assert.ok(!reviewer.includes('resume'));
+});

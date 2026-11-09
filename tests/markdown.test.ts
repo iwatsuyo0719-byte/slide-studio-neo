@@ -25,3 +25,7 @@ test('Markdown：HTML・属性・リンクは実行可能なHTMLにならない'
     assert.match(html, /&quot;x&quot;/);
     assert.match(html, /&amp; &#39;/);
 });
+
+test('Markdown：注記をPDFの9pt用要素にし、注記内でもHTMLとリンクを通さない', () => {
+    assert.equal(markdownToHTML('注：<img src=x> [参照](https://example.com)'), '<p class="note">注：&lt;img src=x&gt; [参照](https://example.com)</p>');
+});

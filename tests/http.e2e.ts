@@ -49,3 +49,36 @@ test('HTTP：入力保存→設計図承認→完了→安全なHTML配信→履
         id: string;
     }) => v.id === r.id));
 });
+
+test('HTTP：議事録のMarkdown・PDFをattachment配信し、範囲外のファイルを拒否する', { timeout: 30000 }, async () => {
+    const boot = await fetch(base + '/api/neo').then(r => r.json());
+    assert.equal(boot.fake, true);
+    const form = new FormData();
+    form.append('input', JSON.stringify({ title: 'HTTP議事録確認', audience: '社内', purpose: '議事録', formats: ['html'], level: '簡易', palette: null, brand: null, material: '架空の週次会議。担当と期限は未確認。', ai: { provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' } }));
+    const response = await fetch(base + '/api/neo', { method: 'POST', headers: { 'x-neo-token': boot.token }, body: form });
+    assert.equal(response.status, 200);
+    const created = await response.json();
+    let done;
+    for (let n = 0; n < 400; n++) {
+        const state = await fetch(base + '/api/neo?id=' + encodeURIComponent(created.id)).then(r => r.json());
+        if (state.status === 'done') { done = state; break; }
+        if (state.status === 'error') assert.fail(state.error);
+        await delay(50);
+    }
+    assert.ok(done, '議事録の完了待ち');
+    assert.ok(!done.files.some((f: string) => /html|pptx|preview/.test(f)));
+    const url = base + '/api/files/' + encodeURIComponent(created.id) + '/';
+    const markdown = await fetch(url + 'minutes.md?download=1');
+    assert.equal(markdown.status, 200);
+    assert.equal(markdown.headers.get('content-type'), 'text/markdown; charset=utf-8');
+    assert.match(markdown.headers.get('content-disposition')!, /^attachment;/);
+    assert.match(await markdown.text(), /## 宿題/);
+    if (done.files.includes('minutes.pdf')) {
+        const pdf = await fetch(url + 'minutes.pdf?download=1');
+        assert.equal(pdf.status, 200);
+        assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+        assert.match(pdf.headers.get('content-disposition')!, /^attachment;/);
+        assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString(), '%PDF');
+    } else assert.match(done.pdfNote, /PDFは作れませんでした/);
+    for (const file of ['state.json', '..%5Csettings.json', '..%2Fminutes.pdf']) assert.equal((await fetch(url + file)).status, 404);
+});

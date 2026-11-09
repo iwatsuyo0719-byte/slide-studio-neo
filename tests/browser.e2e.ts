@@ -11,7 +11,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
     assert.equal(bootstrap.fake, true, '実AIでは実行しません');
     const profile = path.resolve('test-results/browser-test-' + crypto.randomUUID());
     await fs.mkdir(profile, { recursive: true });
-    const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--disable-software-rasterizer', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--window-size=1280,720', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(chrome, [...(process.env.NEO_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), '--headless=new', '--disable-gpu', '--disable-software-rasterizer', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--window-size=1280,720', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr?.on('data', d => stderr += d);
     let ws: WebSocket | undefined;
@@ -38,7 +38,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         }>();
         ws.addEventListener('message', e => {
             const m = JSON.parse(String(e.data));
-            if (m.method === 'Runtime.exceptionThrown')
+            if (m.method === 'Runtime.exceptionThrown' || (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error'))
                 errors.push(JSON.stringify(m.params));
             if (m.id) {
                 const p = pending.get(m.id);
@@ -111,9 +111,12 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await wait("document.querySelector('.design-drawer')");
         const designShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile('test-results/verification/design-1280.png', Buffer.from(designShot.data, 'base64'));
+        // Observe the first done DOM commit, so an effect cannot hide a missing initial preview.
+        await evaluate("new MutationObserver((_,observer)=>{if(!document.querySelector('.result-top'))return;if(!document.querySelector('iframe[title=成果物プレビュー]'))document.documentElement.dataset.previewMissing='true';else observer.disconnect();}).observe(document.querySelector('.right-column'),{childList:true,subtree:true})");
         await click('OKで本番へ');
         await wait("document.querySelector('.result-top')?.textContent.includes('できあがりました')");
         assert.ok(await evaluate("document.querySelector('iframe[title=成果物プレビュー]')?.getAttribute('sandbox')==='allow-scripts'"));
+        assert.equal(await evaluate("document.documentElement.dataset.previewMissing || ''"), '', '完了の初回描画からsandbox付きプレビューがある');
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codex')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
@@ -132,8 +135,11 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await wait("document.querySelector('.fixed-format')?.textContent==='Markdown＋PDF（固定）'");
         assert.equal(await evaluate("document.querySelector('.palette-panel').getAttribute('aria-disabled')"), 'true');
         assert.ok(await evaluate("document.querySelector('.palette-panel').textContent.includes('議事録では配色を使いません')"));
-        assert.equal(await evaluate("[...document.querySelectorAll('[data-palette]')].every(b=>b.disabled && b.tabIndex===-1)"), true);
+        assert.equal(await evaluate("[...document.querySelectorAll('.palette-panel button,.palette-panel input')].every(b=>b.disabled && b.tabIndex===-1)"), true);
         assert.equal(await evaluate("document.querySelector('.marquee').tabIndex"), -1);
+        const lockedPalette = await evaluate("document.querySelector('[data-palette].selected').getAttribute('data-palette')");
+        await evaluate("document.querySelector('[data-palette]:not(.selected)').click()");
+        assert.equal(await evaluate("document.querySelector('[data-palette].selected').getAttribute('data-palette')"), lockedPalette);
         await evaluate("document.querySelector('[data-palette=auto]').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))");
         await delay(250);
         assert.equal(await evaluate("!!document.querySelector('.palette-popup')"), false);

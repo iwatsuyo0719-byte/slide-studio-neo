@@ -101,12 +101,12 @@ export async function statuses(force = false): Promise<Record<Provider, CLIStatu
     cached = { at: Date.now(), value };
     return value;
 }
-export function cliArgs(ai: AIChoice, level: Level, s: Settings, cwd: string, prompt: string, readOnly = false, prompts = '') {
+export function cliArgs(ai: AIChoice, level: Level, s: Settings, cwd: string, prompt: string, readOnly = false, prompts = '', documentOnly = false) {
     const choice = effectiveAI(ai, level, s, readOnly);
     if (ai.provider === 'codex')
         return ['exec', '-m', choice.model, '-c', 'model_reasoning_effort=' + choice.depth, '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--skip-git-repo-check', '--color', 'never', prompt];
-    const tools = readOnly ? ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)'] : ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)', 'Write(' + cwd.replaceAll('\\', '/') + '/**)', 'Edit(' + cwd.replaceAll('\\', '/') + '/**)', 'Bash(python build_slides.py)', 'Bash(python3 build_slides.py)'];
-    return ['-p', prompt, '--model', choice.model, '--effort', String(choice.depth), '--add-dir', cwd, '--add-dir', prompts, '--tools', readOnly ? 'Read' : 'Read,Write,Edit,Bash', '--allowedTools', ...tools, '--permission-mode', 'dontAsk'];
+    const tools = readOnly ? ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)'] : ['Read(' + cwd.replaceAll('\\', '/') + '/**)', 'Read(' + prompts.replaceAll('\\', '/') + '/**)', 'Write(' + cwd.replaceAll('\\', '/') + '/**)', 'Edit(' + cwd.replaceAll('\\', '/') + '/**)', ...(documentOnly ? [] : ['Bash(python build_slides.py)', 'Bash(python3 build_slides.py)'])];
+    return ['-p', prompt, '--model', choice.model, '--effort', String(choice.depth), '--add-dir', cwd, '--add-dir', prompts, '--tools', readOnly ? 'Read' : documentOnly ? 'Read,Write,Edit' : 'Read,Write,Edit,Bash', '--allowedTools', ...tools, '--permission-mode', 'dontAsk'];
 }
 export async function terminate(child: ChildProcess | undefined) {
     if (!child?.pid)

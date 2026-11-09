@@ -101,7 +101,7 @@ async function actualStage(r: RecordData, stage: Stage, job: Job) {
     let buffer = '';
     let last = 0;
     const since = Date.now();
-    const output = await execute(command, cliArgs(ai, r.selectedLevel || r.input.level, s, dir, protocol, review, prompts), dir, chunk => {
+    const output = await execute(command, cliArgs(ai, r.selectedLevel || r.input.level, s, dir, protocol, review, prompts, isMinutes(r.input)), dir, chunk => {
         buffer = (buffer + clean(chunk)).slice(-12000);
         if (Date.now() - last > 800) {
             last = Date.now();

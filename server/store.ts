@@ -99,6 +99,7 @@ export async function readRecord(id: string) {
     const r = await jsonRead<RecordData | null>(file, null);
     if (!r)
         throw Error('依頼が見つかりません');
+    // Legacy 会議まとめ records retain their original label and slide artifacts for history display.
     return r;
 }
 const saveQueues = new Map<string, Promise<void>>();

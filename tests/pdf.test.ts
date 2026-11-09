@@ -1,10 +1,21 @@
-import test from 'node:test';
+import test, { after, mock } from 'node:test';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createMinutesPDF, findBrowser, minutesHTML, PDF_NOTE } from '../server/pdf';
 import { fakeMinutes } from '../server/fake';
+
+// Restricted Windows test accounts cannot start Chrome's renderer sandbox.
+// This opt-in changes only the test process; production PDF launch arguments stay intact.
+if (process.env.NEO_TEST_NO_SANDBOX === '1') {
+    const spawn = childProcess.spawn;
+    mock.method(childProcess, 'spawn', (bin: string, args: string[], options: childProcess.SpawnOptions) => spawn(bin, args.includes('--headless=new') ? [...args, '--no-sandbox'] : args, options));
+    syncBuiltinESMExports();
+    after(() => { mock.restoreAll(); syncBuiltinESMExports(); });
+}
 
 test('PDF：指定の印刷書式とHTMLエスケープ', () => {
     const html = minutesHTML('# 会議\n\n<script>実行</script>');
@@ -26,6 +37,7 @@ test('PDF：Chrome/Edgeで実際に印刷し、一時HTMLは依頼に残さな�
 test('PDF：none・失敗・中断時は古いPDFを渡さない', async () => {
     const previous = process.env.NEO_BROWSER;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-pdf-test-'));
+    const before = (await fs.readdir(os.tmpdir())).filter(n => n.startsWith('neo-minutes-')).sort();
     try {
         await fs.writeFile(path.join(dir, 'minutes.md'), fakeMinutes);
         await fs.writeFile(path.join(dir, 'minutes.pdf'), 'old');
@@ -38,8 +50,24 @@ test('PDF：none・失敗・中断時は古いPDFを渡さない', async () => {
         const controller = new AbortController(); controller.abort();
         await assert.rejects(createMinutesPDF(dir, controller.signal));
         assert.deepEqual(await fs.readdir(dir), ['minutes.md']);
+        assert.deepEqual((await fs.readdir(os.tmpdir())).filter(n => n.startsWith('neo-minutes-')).sort(), before);
     } finally {
         if (previous === undefined) delete process.env.NEO_BROWSER; else process.env.NEO_BROWSER = previous;
         await fs.rm(dir, { recursive: true, force: true });
     }
+});
+
+test('PDF：印刷中の中断でも一時HTML・プロファイルと途中のPDFを残さない', { timeout: 15000 }, async t => {
+    if (!await findBrowser()) return t.skip('Chrome/Edgeが見つかりません');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-pdf-test-'));
+    const before = (await fs.readdir(os.tmpdir())).filter(n => n.startsWith('neo-minutes-')).sort();
+    try {
+        await fs.writeFile(path.join(dir, 'minutes.md'), fakeMinutes);
+        const controller = new AbortController();
+        await assert.rejects(createMinutesPDF(dir, controller.signal, child => {
+            child.once('spawn', () => controller.abort());
+        }));
+        assert.deepEqual(await fs.readdir(dir), ['minutes.md']);
+        assert.deepEqual((await fs.readdir(os.tmpdir())).filter(n => n.startsWith('neo-minutes-')).sort(), before);
+    } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });

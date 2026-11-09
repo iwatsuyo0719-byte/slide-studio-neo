@@ -62,7 +62,7 @@ export function markdownToHTML(markdown: string): string {
         else {
             const paragraph = [line]; at++;
             while (at < lines.length && lines[at].trim() && !special(at)) paragraph.push(lines[at++]);
-            output.push('<p>' + inline(paragraph.join('\n')) + '</p>');
+            output.push((/^注[：:]/.test(line) ? '<p class="note">' : '<p>') + inline(paragraph.join('\n')) + '</p>');
         }
     }
     return output.join('\n');

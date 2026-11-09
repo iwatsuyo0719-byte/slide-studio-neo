@@ -153,11 +153,11 @@ export default function PalettePanel({ palettes, value, brand, onChange, onBrand
             showPreview(e.currentTarget, p, id, name);
         }}
         onBlur={() => { drag.current.focus = false; hidePreview(); }}
-        onClick={() => { if (!drag.current.moved) onChange(id); }}
+        onClick={() => { if (!disabled && !drag.current.moved) onChange(id); }}
         aria-label={p ? `${id} ${name}。${p.mood}。${p.group}。${p.colors.join('、')}` : `${name}。${description(id)}`}
         title={disabled ? undefined : p ? `${id} ${name}：${p.mood}（${p.group}） ${p.colors.join(' ')}` : `${name}：${description(id)}`}
         data-palette={clone ? undefined : id}><span className="color-bar">{p ? p.colors.map(c => <i key={c} style={{ background: c }}/>) : <span>{id === 'auto' ? '✦' : '#______'}</span>}</span><small>{id === 'auto' ? 'AUTO' : id === 'brand' ? 'HEX' : id}</small><span>{name}</span></button>;
-    return <section className={'palette-panel ' + (disabled ? 'locked' : '')} aria-label="配色" aria-disabled={disabled}><div className="palette-head"><h2><b className="number">6</b>配色 <small>{unavailableReason || 'ドラッグで流せます'}</small></h2><div className="palette-tabs" aria-label="配色の系統">{['すべて', ...groups].map(g => <button key={g} className={g === group ? 'on' : ''} aria-pressed={g === group} disabled={disabled} onClick={() => setGroup(g)}>{g}</button>)}</div><span className="spacer"/><span className="hint selection">選択中：{selected ? selected.id + ' ' + selected.name : value === 'auto' ? 'おまかせ' : 'ブランド色'}</span></div>
+    return <section className={'palette-panel ' + (disabled ? 'locked' : '')} aria-label="配色" aria-disabled={disabled}><div className="palette-head"><h2><b className="number">6</b>配色 <small>{unavailableReason || 'ドラッグで流せます'}</small></h2><div className="palette-tabs" aria-label="配色の系統">{['すべて', ...groups].map(g => <button key={g} className={g === group ? 'on' : ''} aria-pressed={g === group} tabIndex={disabled ? -1 : 0} disabled={disabled} onClick={() => setGroup(g)}>{g}</button>)}</div><span className="spacer"/><span className="hint selection">選択中：{selected ? selected.id + ' ' + selected.name : value === 'auto' ? 'おまかせ' : 'ブランド色'}</span></div>
  <div className="marquee" ref={viewport} tabIndex={disabled ? -1 : 0} role="region" aria-label="配色パネル。ドラッグか左右キーで動かせます" onFocus={() => { drag.current.focus = true; }} onBlur={e => {
             if (!e.currentTarget.contains(e.relatedTarget as Node))
                 drag.current.focus = false;
@@ -194,6 +194,7 @@ export default function PalettePanel({ palettes, value, brand, onChange, onBrand
                 viewport.current.releasePointerCapture(e.pointerId);
             setTimeout(() => { d.moved = false; }, 0);
         }} onPointerCancel={() => drag.current.down = false} onKeyDown={e => {
+            if (disabled) return;
             if (['ArrowLeft', 'ArrowRight'].includes(e.key) && viewport.current) {
                 e.preventDefault();
                 drag.current.velocity = 0;
@@ -210,7 +211,7 @@ export default function PalettePanel({ palettes, value, brand, onChange, onBrand
             }
         }}>
  <div className="palette-track" ref={track}>{[false, true].map(clone => <div className="palette-group" key={String(clone)} aria-hidden={clone || undefined} inert={clone || undefined}>{card(undefined, 'auto', 'おまかせ', clone)}{filtered.map(p => card(p, p.id, p.name, clone))}{card(undefined, 'brand', 'ブランド色', clone)}</div>)}</div></div>
- <div className="selected-colors">{selected?.colors.map(c => <span key={c} style={{ background: c }} title={c}><span>{c}</span></span>)}{value === 'auto' && <span className="hint">素材に合う配色をAIが選びます。詳細版では3組から選べます</span>}{value === 'brand' && <label>ブランド色 <input aria-label="ブランド色HEX" value={brand} onChange={e => onBrand(e.target.value)} placeholder="#225966" maxLength={7} disabled={disabled}/><small># と6桁のHEX</small></label>}</div>
+ <div className="selected-colors">{selected?.colors.map(c => <span key={c} style={{ background: c }} title={disabled ? undefined : c}><span>{c}</span></span>)}{value === 'auto' && <span className="hint">素材に合う配色をAIが選びます。詳細版では3組から選べます</span>}{value === 'brand' && <label>ブランド色 <input aria-label="ブランド色HEX" value={brand} onChange={e => onBrand(e.target.value)} placeholder="#225966" maxLength={7} tabIndex={disabled ? -1 : 0} disabled={disabled}/><small># と6桁のHEX</small></label>}</div>
  {preview && !disabled && createPortal(<div ref={popup} className="palette-popup" aria-hidden="true"
      onMouseLeave={e => { hidePreview(); drag.current.hover = containsTarget(viewport.current, e.relatedTarget); }}
      onMouseDown={e => e.preventDefault()}

@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { create, act, current, list, minutesProtocol } from '../server/runner';
-import { requestDir, safeFile, save, readRecord } from '../server/store';
+import { requestDir, requests, safeFile, save, readRecord } from '../server/store';
 import { guard, token } from '../server/http';
 import { defaults, type Input, type RecordData } from '../lib/domain';
 process.env.NEO_FAKE_AI = '1';
@@ -155,4 +155,33 @@ test('議事録：簡易は止めず、詳細は台帳の修正・承認後に�
             assert.match(protocol, /minutes\.md/);
         }
     } finally { if (previous === undefined) delete process.env.NEO_BROWSER; else process.env.NEO_BROWSER = previous; }
+});
+
+test('議事録の配信でも親フォルダ・隣の依頼・junction経由の読み取りを拒否する', async () => {
+    const previous = process.env.NEO_BROWSER;
+    process.env.NEO_BROWSER = 'none';
+    let link: string | undefined;
+    const outside = path.join(requests, 'outside-' + crypto.randomUUID());
+    try {
+        const created = await create({ ...input, purpose: '議事録' }, []);
+        const done = await waitFor(created.id, 'done');
+        assert.equal(path.dirname(outside), requests);
+        await fs.mkdir(outside);
+        await fs.writeFile(path.join(outside, 'minutes.md'), '非公開の素材');
+        await fs.writeFile(path.join(outside, 'minutes.pdf'), '%PDF-private');
+        await fs.writeFile(path.join(outside, 'page.png'), 'private-image');
+        for (const file of ['minutes.md', 'minutes.pdf']) {
+            await assert.rejects(safeFile(done.id, ['..', path.basename(outside), file]));
+            await assert.rejects(safeFile(done.id, [outside, file]));
+        }
+        const previewLink = path.join(requestDir(done.id), 'preview');
+        await fs.symlink(outside, previewLink, process.platform === 'win32' ? 'junction' : 'dir');
+        link = previewLink;
+        await assert.rejects(safeFile(done.id, ['preview', 'page.png']), /リンク先/);
+        assert.ok(await safeFile(done.id, ['minutes.md']));
+    } finally {
+        if (link) await fs.unlink(link);
+        if (path.dirname(outside) === requests) await fs.rm(outside, { recursive: true, force: true });
+        if (previous === undefined) delete process.env.NEO_BROWSER; else process.env.NEO_BROWSER = previous;
+    }
 });
