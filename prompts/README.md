@@ -6,6 +6,7 @@
 
 - 毎回、core.md、依頼フォルダのrequest.mdとmaterial.mdを読む。
 - 打合せの文字起こしが素材ならmeeting.mdを追加する。
+- 目的が議事録なら、meeting.mdとminutes.mdを読み、議事録の文書を作る。スライドの描画・型の規則（core.mdの描画以降、evidence.md、icons.md、interactive.md）は読まない。
 - 主体を表すアイコンを使う場合だけicons.mdを追加する。
 - 数字・調査・比較・計画・顧客像などの根拠ページがある場合はevidence.mdを読む。設計で型を確定後、採用するevidence/E01.md〜E12.mdだけを読む。
 - 操作可能なHTMLを求められた場合はinteractive.mdを追加する。実装の見本が必要なときだけinteractive_example.htmlを見る。
