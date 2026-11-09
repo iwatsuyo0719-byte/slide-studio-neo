@@ -29,3 +29,11 @@ test('Markdown：HTML・属性・リンクは実行可能なHTMLにならない'
 test('Markdown：注記をPDFの9pt用要素にし、注記内でもHTMLとリンクを通さない', () => {
     assert.equal(markdownToHTML('注：<img src=x> [参照](https://example.com)'), '<p class="note">注：&lt;img src=x&gt; [参照](https://example.com)</p>');
 });
+
+test('Markdown：5000段の引用も3段で止め、残りは本文にする', () => {
+    const html = markdownToHTML('>'.repeat(5000) + '本文');
+    assert.equal((html.match(/<blockquote>/g) || []).length, 3);
+    assert.ok(html.includes('&gt;'.repeat(4997) + '本文'));
+    assert.equal(markdownToHTML('> > > > 本文'), '<blockquote><blockquote><blockquote><p>&gt; 本文</p></blockquote></blockquote></blockquote>');
+    assert.equal(markdownToHTML('> > > 三段'), '<blockquote><blockquote><blockquote><p>三段</p></blockquote></blockquote></blockquote>');
+});

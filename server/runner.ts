@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
-import { isMinutes, requestText, validateInput, effectiveAI, historyKey, type Input, type RecordData, type Stage, type Provider } from '../lib/domain';
-import { repo, requestDir, readRecord, save, settings, palettes, artifacts, sample, allRecords, jsonRead, safeFile } from './store';
+import { isMinutes, requestTitle, requestText, validateInput, effectiveAI, historyKey, type Input, type RecordData, type Stage, type Provider } from '../lib/domain';
+import { repo, atomicText, requestDir, readRecord, save, settings, palettes, artifacts, sample, allRecords, jsonRead, safeFile } from './store';
 import { locate, execute, statuses, cliArgs, terminate } from './cli';
 import { fakeStage } from './fake';
 import { createMinutesPDF } from './pdf';
@@ -279,7 +279,7 @@ export async function create(raw: unknown, files: File[]) {
     const available = await statuses();
     if (!available[i.ai.provider].usable)
         throw Error(available[i.ai.provider].message);
-    const title = (i.title.trim() || i.material.trim().split(/\r?\n/)[0]?.slice(0, 24) || files[0]?.name || 'スライド').replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\.+/g, '-').slice(0, 60) || 'スライド';
+    const title = requestTitle(i, files);
     const date = new Date().toLocaleDateString('sv-SE');
     const id = date + '-' + title + '-' + crypto.randomUUID().slice(0, 8);
     const dir = requestDir(id);
@@ -339,7 +339,7 @@ export async function act(id: string, action: string, data: Record<string, unkno
                 throw Error('議事録は50万文字までのMarkdownで入力してください');
             // 保存先はこの依頼の正本だけ。外部へのリンクも拒否する。
             const file = await safeFile(id, ['minutes.md']);
-            await fs.writeFile(file, data.minutes);
+            await atomicText(file, data.minutes);
             r.pdfNote = await createMinutesPDF(dir);
             if (r.pdfNote) await log(r, r.pdfNote);
             await artifacts(r);

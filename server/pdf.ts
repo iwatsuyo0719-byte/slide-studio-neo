@@ -7,6 +7,7 @@ import { locate, terminate, type Command } from './cli';
 import { markdownToHTML } from '../lib/markdown';
 
 export const PDF_NOTE = 'PDFは作れませんでした（Chrome か Edge が必要）';
+export const PDF_CONVERSION_NOTE = 'PDFは作れませんでした（議事録のPDF変換に失敗しました）';
 export const printCSS = `
 @page { size: A4 portrait; margin: 25mm 20mm;
     @bottom-center { content: counter(page); font-size: 9pt; }
@@ -80,14 +81,17 @@ export async function createMinutesPDF(dir: string, signal?: AbortSignal, onChil
         if (bytes.subarray(0, 4).toString() !== '%PDF') throw Error('PDFがありません');
         signal?.throwIfAborted();
     } catch (error) {
-        await fs.rm(output, { force: true });
+        await fs.rm(output, { force: true }).catch(cleanupError => console.warn('PDFの後片付けに失敗しました', cleanupError));
         if (signal?.aborted) throw error;
-        return PDF_NOTE;
+        console.warn('議事録のPDF変換に失敗しました', error);
+        return PDF_CONVERSION_NOTE;
     } finally {
-        if (temporary) {
+        if (temporary) try {
             const target = path.resolve(temporary);
             if (path.dirname(target) !== path.resolve(os.tmpdir()) || !path.basename(target).startsWith('neo-minutes-')) throw Error('一時フォルダの場所が不正です');
             await fs.rm(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+        } catch (error) {
+            console.warn('PDF一時フォルダの後片付けに失敗しました', error);
         }
     }
 }

@@ -32,6 +32,8 @@ export async function POST(req: Request) {
             const files = form.getAll('files').filter((f): f is File => typeof f !== 'string');
             return json(await create(input, files));
         }
+        if (Number(req.headers.get('content-length') || 0) > 4 * 1024 * 1024)
+            return json({ error: 'JSON本文は4MBまでです' }, 413);
         const body = await req.json();
         if (body.action === 'settings') {
             const s = validateSettings(body.settings);

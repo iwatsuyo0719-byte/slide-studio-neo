@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createMinutesPDF, findBrowser, minutesHTML, PDF_NOTE } from '../server/pdf';
+import { createMinutesPDF, findBrowser, minutesHTML, PDF_NOTE, PDF_CONVERSION_NOTE } from '../server/pdf';
 import { fakeMinutes } from '../server/fake';
 
 // Inspect only this process's temporary files, even when another test prints concurrently.
@@ -56,7 +56,7 @@ test('PDF：none・失敗・中断時は古いPDFを渡さない', async () => {
         assert.equal(await createMinutesPDF(dir), PDF_NOTE);
         await assert.rejects(fs.stat(path.join(dir, 'minutes.pdf')));
         process.env.NEO_BROWSER = path.join(dir, 'missing-browser');
-        assert.equal(await createMinutesPDF(dir), PDF_NOTE);
+        assert.equal(await createMinutesPDF(dir), PDF_CONVERSION_NOTE);
         const controller = new AbortController(); controller.abort();
         await assert.rejects(createMinutesPDF(dir, controller.signal));
         assert.deepEqual(await fs.readdir(dir), ['minutes.md']);

@@ -192,3 +192,15 @@ export function rangeText(r: [
     number,
     number
 ]) { return '約' + Math.max(1, Math.round(r[0] / 60000)) + '〜' + Math.max(1, Math.round(r[1] / 60000)) + '分'; }
+
+// Normalize only the reusable form input; historical records keep their original purpose.
+export function historyInput(input: Input): Input {
+    return { ...input, purpose: Object.hasOwn(purposes, input.purpose) ? input.purpose : '議事録' };
+}
+export function requestTitle(input: Input, files: { name: string }[] = []): string {
+    const fallback = isMinutes(input) ? '議事録' : 'スライド';
+    const line = input.material.split(/\r?\n/).map(line => line.trim()).find(line =>
+        line && !/^(?:（.*）|\(.*\)|【.*】|\[.*\])$/.test(line) && /[\p{L}\p{N}]/u.test(line));
+    const title = input.title.trim() || line?.slice(0, 24) || (!isMinutes(input) && files[0]?.name) || fallback;
+    return title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\.+/g, '-').slice(0, 60) || fallback;
+}

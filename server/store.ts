@@ -40,6 +40,20 @@ async function jsonReadOnce<T>(file: string, fallback: T): Promise<T> {
         throw e;
     }
 }
+// Markdown must never fall back to an in-place write (including hard-linked files).
+export async function atomicText(file: string, text: string) {
+    const temp = file + '.' + crypto.randomUUID() + '.tmp';
+    try {
+        await fs.writeFile(temp, text, { flag: 'wx' });
+        for (let attempt = 0;; attempt++) {
+            try { await fs.rename(temp, file); break; }
+            catch (error) {
+                if (attempt >= 19 || !['EPERM', 'EBUSY', 'EACCES'].includes((error as NodeJS.ErrnoException).code || '')) throw error;
+                await new Promise(resolve => setTimeout(resolve, Math.min(25 * (attempt + 1), 200)));
+            }
+        }
+    } finally { await fs.rm(temp, { force: true }).catch(() => { }); }
+}
 export async function atomic(file: string, data: unknown) {
     await fs.mkdir(path.dirname(file), { recursive: true });
     const temp = file + '.' + crypto.randomUUID() + '.tmp';
@@ -141,6 +155,7 @@ export async function artifacts(r: RecordData) {
     const base = requestDir(r.id);
     const files: string[] = [];
     for (const name of isMinutes(r.input) ? ['minutes.md', 'minutes.pdf', 'ledger.md'] : ['index.html', 'slides.pptx', 'palette-comparison.html']) {
+        if (name === 'minutes.pdf' && r.pdfNote) continue;
         if (await fs.stat(path.join(base, name)).then(s => s.isFile() && s.size > 0).catch(() => false))
             files.push(name);
     }

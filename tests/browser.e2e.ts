@@ -187,7 +187,13 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         const beforeEdit = await evaluate("document.querySelector('.minutes-source').value");
         await evaluate("(()=>{const el=document.querySelector('.minutes-source');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,el.value+'\\n手動保存の動作確認。\\n');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await wait("document.querySelector('.minutes-toolbar').textContent.includes('未保存')");
+        await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
+        await wait("document.querySelector('#minutes-save-first')?.textContent.includes('先に保存してください')");
+        assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='直しを送る').disabled"), true);
+        await click('直しを送る');
+        assert.equal(await evaluate("document.querySelector('.minutes-source').value"), beforeEdit + '\n手動保存の動作確認。\n');
         await click('表示');
+        assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='直しを送る').disabled"), true);
         assert.ok(await evaluate("!document.querySelector('.minutes-document').textContent.includes('手動保存の動作確認')"));
         await click('編集');
         assert.equal(await evaluate("document.querySelector('.minutes-source').value"), beforeEdit + '\n手動保存の動作確認。\n');
@@ -198,6 +204,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate("document.querySelector('.minutes-source').disabled"), true);
         await wait("document.querySelector('.minutes-document')?.textContent.includes('手動保存の動作確認')");
         await evaluate("window.fetch=window.__originalFetch");
+        await wait("!document.querySelector('#minutes-save-first') && ![...document.querySelectorAll('button')].find(b=>b.textContent==='直しを送る').disabled");
         assert.match(await fetch(markdownURL).then(r=>r.text()), /手動保存の動作確認/);
         await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await click('直しを送る');

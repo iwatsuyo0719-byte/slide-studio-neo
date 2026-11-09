@@ -2,7 +2,7 @@ import './workspace';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { parsePalettes, requestText, purposes, subscriptionEnv, allowedDepths, allowedModels, effectiveAI, defaults, validateInput, validateSettings, estimate, historyKey, progress, type Input, type RecordData } from '../lib/domain';
+import { historyInput, requestTitle, parsePalettes, requestText, purposes, subscriptionEnv, allowedDepths, allowedModels, effectiveAI, defaults, validateInput, validateSettings, estimate, historyKey, progress, type Input, type RecordData } from '../lib/domain';
 import { cliArgs } from '../server/cli';
 import { fakePptx } from '../server/fake';
 const input: Input = { title: '試験', audience: '社外', purpose: '提案', formats: ['html'], level: '詳細', palette: '026', brand: '#225966', material: 'テスト素材', ai: { provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' } };
@@ -88,4 +88,24 @@ test('議事録のCLIはスライド生成用のBash許可を渡さず、レビ�
     assert.equal(reviewer[0], 'exec');
     assert.ok(reviewer.includes('read-only'));
     assert.ok(!reviewer.includes('resume'));
+});
+
+test('履歴入力：旧会議まとめと未知の目的を議事録にし、履歴原本は変更しない', () => {
+    for (const purpose of ['会議まとめ', 'unknown', 'toString']) {
+        const legacy = { ...input, purpose } as Input;
+        assert.equal(historyInput(legacy).purpose, '議事録');
+        assert.equal(legacy.purpose, purpose);
+    }
+    for (const purpose of Object.keys(purposes) as Input['purpose'][]) assert.equal(historyInput({ ...input, purpose }).purpose, purpose);
+});
+test('題名：先頭の空行・括弧行・記号行を飛ばし、本文がなければ既定名にする', () => {
+    const material = '\n （文字起こし・未整形。架空の会議です）\n(注意)\n【注意】\n[注記]\n---\n！？★\n週次会議の記録\n本文';
+    assert.equal(requestTitle({ ...input, title: '', purpose: '議事録', material }), '週次会議の記録');
+    assert.equal(requestTitle({ ...input, title: '指定名', material }), '指定名');
+    for (const purpose of ['議事録', '提案'] as const) {
+        assert.equal(requestTitle({ ...input, title: '', purpose, material: '\n（注記）\n***' }), purpose === '議事録' ? '議事録' : 'スライド');
+    }
+    assert.equal(requestTitle({ ...input, title: '', purpose: '議事録', material: '' }, [{ name: 'transcript.txt' }]), '議事録');
+    assert.equal(requestTitle({ ...input, title: '', material: '' }, [{ name: 'slides.txt' }]), 'slides-txt');
+    assert.equal(requestTitle({ ...input, title: '', material: '（注意）本題' }), '（注意）本題');
 });

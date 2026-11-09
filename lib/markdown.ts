@@ -13,6 +13,9 @@ function cells(line: string): string[] {
 }
 const item = (line: string) => line.match(/^(\s*)(-|\d+\.)\s+(.+)$/);
 export function markdownToHTML(markdown: string): string {
+    return renderMarkdown(markdown, 0);
+}
+function renderMarkdown(markdown: string, quoteDepth: number): string {
     const lines = markdown.replace(/^\uFEFF/, '').replaceAll('\r\n', '\n').split('\n');
     let at = 0;
     const table = (n: number) => n + 1 < lines.length && lines[n].includes('|') && cells(lines[n + 1]).every(c => /^:?-{3,}:?$/.test(c)) && cells(lines[n]).length === cells(lines[n + 1]).length;
@@ -54,10 +57,10 @@ export function markdownToHTML(markdown: string): string {
             output.push(html + '</tbody></table>');
         }
         else if (item(line)) output.push(list(item(line)![1].length, 0));
-        else if (/^\s*>/.test(line)) {
+        else if (quoteDepth < 3 && /^\s*>/.test(line)) {
             const quote: string[] = [];
             while (at < lines.length && /^\s*>/.test(lines[at])) quote.push(lines[at++].replace(/^\s*>\s?/, ''));
-            output.push('<blockquote>' + markdownToHTML(quote.join('\n')) + '</blockquote>');
+            output.push('<blockquote>' + renderMarkdown(quote.join('\n'), quoteDepth + 1) + '</blockquote>');
         }
         else {
             const paragraph = [line]; at++;
