@@ -66,13 +66,24 @@ test('HTTP：議事録のMarkdown・PDFをattachment配信し、範囲外のフ�
         await delay(50);
     }
     assert.ok(done, '議事録の完了待ち');
+    assert.equal(done.selectedLevel, '詳細');
+    assert.ok(done.review);
+    const saveBody = JSON.stringify({ action: 'save-minutes', id: created.id, minutes: '# HTTPで編集した議事録\n\n保存を確認。' });
+    const headers = { 'Content-Type': 'application/json', 'x-neo-token': boot.token };
+    for (const deniedHeaders of [{ 'Content-Type': 'application/json' }, { ...headers, origin: 'https://evil.example' }]) {
+        assert.equal((await fetch(base + '/api/neo', { method: 'POST', headers: deniedHeaders, body: saveBody })).status, 400);
+    }
+    const savedResponse = await fetch(base + '/api/neo', { method: 'POST', headers, body: saveBody });
+    assert.equal(savedResponse.status, 200);
+    done = await savedResponse.json();
+    assert.match(done.minutes, /HTTPで編集した議事録/);
     assert.ok(!done.files.some((f: string) => /html|pptx|preview/.test(f)));
     const url = base + '/api/files/' + encodeURIComponent(created.id) + '/';
     const markdown = await fetch(url + 'minutes.md?download=1');
     assert.equal(markdown.status, 200);
     assert.equal(markdown.headers.get('content-type'), 'text/markdown; charset=utf-8');
     assert.match(markdown.headers.get('content-disposition')!, /^attachment;/);
-    assert.match(await markdown.text(), /## 宿題/);
+    assert.match(await markdown.text(), /HTTPで編集した議事録/);
     if (done.files.includes('minutes.pdf')) {
         const pdf = await fetch(url + 'minutes.pdf?download=1');
         assert.equal(pdf.status, 200);

@@ -86,7 +86,7 @@ export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal
             return;
         }
         const selected = r.input.level === 'AUTO' ? (r.input.audience === '社外' || r.input.material.length > 600 ? '詳細' : '簡易') : r.input.level;
-        await put('decision.json', JSON.stringify({ level: selected, reason: r.input.level === 'AUTO' ? '読み手・素材量から' + selected + '版を選びました' : '指定された' + selected + '版で進めます' }));
+        if (!isMinutes(r.input)) await put('decision.json', JSON.stringify({ level: selected, reason: r.input.level === 'AUTO' ? '読み手・素材量から' + selected + '版を選びました' : '指定された' + selected + '版で進めます' }));
         if (isMinutes(r.input)) {
             await put('ledger.md', '# 台帳（偽AI）\n\n## 事実・数値\n会議名：週次会議。日時：［　］（未確認）。見込額：xx円（未確認）。\n\n## 決定\n次回までに計画を確認する。\n\n## 宿題\n| 担当 | 内容 | 期限 |\n|---|---|---|\n| 未確認 | 計画を確認 | 未確認 |\n\n## 相手の発言\n「計画を確認します」\n' + await fs.readFile(path.join(dir, 'design-feedback.md'), 'utf8').catch(() => ''));
             return;

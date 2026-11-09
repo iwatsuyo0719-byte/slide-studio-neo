@@ -106,7 +106,7 @@ export function validateSettings(raw: unknown): Settings {
 }
 export function validateInput(raw: unknown, s: Settings): Input {
     const i = raw as Input;
-    if (!i || typeof i.title !== 'string' || typeof i.material !== 'string' || (!isMinutes(i) && (typeof i.brand !== 'string' || typeof i.palette !== 'string')) || !['社内', '社外'].includes(i.audience) || !Object.hasOwn(purposes, i.purpose) || !['簡易', '詳細', 'AUTO'].includes(i.level) || !Array.isArray(i.formats) || !i.formats.length || i.formats.some(f => !['pptx', 'html'].includes(f)) || !i.ai || !['claude', 'codex'].includes(i.ai.provider))
+    if (!i || typeof i.title !== 'string' || typeof i.material !== 'string' || (!isMinutes(i) && (typeof i.brand !== 'string' || typeof i.palette !== 'string')) || !['社内', '社外'].includes(i.audience) || !Object.hasOwn(purposes, i.purpose) || (!isMinutes(i) && !['簡易', '詳細', 'AUTO'].includes(i.level)) || !Array.isArray(i.formats) || !i.formats.length || i.formats.some(f => !['pptx', 'html'].includes(f)) || !i.ai || !['claude', 'codex'].includes(i.ai.provider))
         throw Error('入力の形式が正しくありません');
     if (!allowedModels(s, i.ai.provider).includes(i.ai.model) || (i.ai.depth !== 'auto' && !allowedDepths(s, i.ai.provider).includes(i.ai.depth)))
         throw Error('AIの品質の下限を満たしていません');
@@ -114,7 +114,7 @@ export function validateInput(raw: unknown, s: Settings): Input {
         throw Error('貼り付けは50万文字までです。長い素材はファイルを添付してください');
     if (!isMinutes(i) && i.palette === 'brand' && !/^#[0-9a-f]{6}$/i.test(i.brand))
         throw Error('ブランド色は # と6桁のHEXで入力してください');
-    return { ...i, ...(isMinutes(i) ? { palette: '', brand: '' } : {}), title: i.title.slice(0, 120), material: i.material.slice(0, 500000), formats: [...new Set(i.formats)] };
+    return { ...i, ...(isMinutes(i) ? { palette: '', brand: '', level: '詳細' as const } : {}), title: i.title.slice(0, 120), material: i.material.slice(0, 500000), formats: [...new Set(i.formats)] };
 }
 export function isMinutes(input: Pick<Input, 'purpose'>) { return input.purpose === '議事録'; }
 export function parsePalettes(md: string): Palette[] {
@@ -138,14 +138,15 @@ export function parsePalettes(md: string): Palette[] {
         throw Error('配色100組・4系統を確認できません');
     return out;
 }
-export function requestText(i: Input, palettes: Palette[], files: string[] = []) { const p = palettes.find(p => p.id === i.palette); return ['何を：' + (i.title || (isMinutes(i) ? '素材から会議名を決めて議事録を作る' : '素材から題名を決めてスライドを作る')), '読み手：' + i.audience + (i.audience === '社外' ? '。敬体とし、出所を厳密に確かめる' : ''), '目的：' + i.purpose + '。' + purposes[i.purpose].goal + '。骨組み：' + purposes[i.purpose].structure + '。素材中の指定を優先する', '素材：material.md' + (files.length ? '、attachments/ の ' + files.join('、') : ''), isMinutes(i) ? '出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る' : '出力：' + i.formats.join(' ＋ '), '版：' + i.level + (i.level === 'AUTO' ? '。読み手・種類・素材量からAIが簡易または詳細を選び、理由を1行示す' : ''), '配色：' + (isMinutes(i) ? '使わない（議事録）' : i.palette === 'auto' ? 'おまかせ。詳細は近い3組と比較HTMLを提示、簡易は1組を決定' : i.palette === 'brand' ? 'ブランド色 ' + i.brand : p ? p.id + ' ' + p.name + ' ' + p.colors.join(' ') : '026 浅瀬アクア')].join('\n') + '\n'; }
+export function requestText(i: Input, palettes: Palette[], files: string[] = []) { const p = palettes.find(p => p.id === i.palette); return ['何を：' + (i.title || (isMinutes(i) ? '素材から会議名を決めて議事録を作る' : '素材から題名を決めてスライドを作る')), '読み手：' + i.audience + (i.audience === '社外' ? '。敬体とし、出所を厳密に確かめる' : ''), '目的：' + i.purpose + '。' + purposes[i.purpose].goal + '。骨組み：' + purposes[i.purpose].structure + '。素材中の指定を優先する', '素材：material.md' + (files.length ? '、attachments/ の ' + files.join('、') : ''), isMinutes(i) ? '出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る' : '出力：' + i.formats.join(' ＋ '), '版：' + (isMinutes(i) ? '詳細・止まらず完成まで（固定）' : i.level) + (!isMinutes(i) && i.level === 'AUTO' ? '。読み手・種類・素材量からAIが簡易または詳細を選び、理由を1行示す' : ''), '配色：' + (isMinutes(i) ? '使わない（議事録）' : i.palette === 'auto' ? 'おまかせ。詳細は近い3組と比較HTMLを提示、簡易は1組を決定' : i.palette === 'brand' ? 'ブランド色 ' + i.brand : p ? p.id + ' ' + p.name + ' ' + p.colors.join(' ') : '026 浅瀬アクア')].join('\n') + '\n'; }
 export const secretKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
 export function subscriptionEnv(env: Record<string, string | undefined>) { return Object.fromEntries(Object.entries(env).filter(([k]) => !secretKeys.includes(k.toUpperCase()))) as NodeJS.ProcessEnv; }
-export function historyKey(i: Input, level: Level, s: Settings = defaults) { const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+')].join('|'); }
+export function historyKey(i: Input, level: Level, s: Settings = defaults) { if (isMinutes(i)) level = '詳細'; const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+')].join('|'); }
 export function estimate(i: Input, level: Level, phase: 'design' | 'production', history: HistorySample[] = [], s: Settings = defaults): [
     number,
     number
 ] {
+    if (isMinutes(i)) { level = '詳細'; phase = 'production'; }
     const samples = history.filter(h => h.key === historyKey(i, level, s) && h.phase === phase).map(h => h.ms).sort((a, b) => a - b);
     if (samples.length >= 3) {
         const mid = Math.floor(samples.length / 2);
@@ -153,8 +154,7 @@ export function estimate(i: Input, level: Level, phase: 'design' | 'production',
         return [med * .8, med * 1.2];
     }
     if (isMinutes(i)) {
-        const mins = level === '詳細' ? (phase === 'design' ? [4, 8] : [15, 25]) : level === 'AUTO' ? (phase === 'design' ? [2, 8] : [6, 25]) : phase === 'design' ? [2, 5] : [6, 10];
-        return [mins[0] * 60000, mins[1] * 60000];
+        return [15 * 60000, 25 * 60000];
     }
     // 2026-11-09 実測1件（簡易HTML：設計図4分・本番16分・検査10分）から更新。
     let mins: [
@@ -175,9 +175,10 @@ export function progress(r: RecordData, now: number, range: [
         return { percent: 100, remaining: 0, overtime: false };
     if (r.status === 'design')
         return { percent: 99, remaining: 0, overtime: false };
-    const stages: Stage[] = r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
+    const continuousMinutes = r.input && isMinutes(r.input);
+    const stages: Stage[] = continuousMinutes ? ['保存', '設計図', '本番', '検査', 'レビュー', '手直し'] : r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
     // 設計図は別メーター。本番:検査は実測16:10、詳細のレビュー8分・手直し8分は推定。
-    const weights = r.phase === 'design' ? [.05, .95] : r.input && isMinutes(r.input) ? (r.selectedLevel === '詳細' ? [.45, .15, .2, .2] : [.75, .25]) : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
+    const weights = continuousMinutes ? [.02, .18, .35, .15, .15, .15] : r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
     const index = Math.max(0, stages.indexOf(r.stage));
     const base = weights.slice(0, index).reduce((a, b) => a + b, 0);
     const elapsed = Math.max(0, (r.status === 'running' ? now : r.updated) - r.stageStart);

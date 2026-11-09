@@ -244,3 +244,12 @@ button:not(:disabled):active,a.download:active{transform:translateY(0) scale(.96
 .fixed-format{margin:0;padding:11px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
 .minutes-document{height:100%;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:8px;font-size:14px;line-height:1.6;overflow-wrap:anywhere;background:#fff}
 .minutes-document h1{font-size:22px}.minutes-document h2,.minutes-document h3{font-size:18px;margin:18px 0 8px}.minutes-document table{border-collapse:collapse;width:100%;font-size:13px}.minutes-document th,.minutes-document td{border:1px solid #bbb;padding:6px}.minutes-document th{background:#f2f2f2}.minutes-document .unconfirmed{font-size:12px}.pdf-note{font-size:12px;max-width:270px}
+
+.minutes-preview{min-height:0}
+.minutes-editor{display:flex;flex-direction:column;gap:8px;height:100%;min-height:0}
+.minutes-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.minutes-toolbar .segments{flex:none}
+.minutes-toolbar button{min-height:36px;font-size:14px}
+.minutes-editor .minutes-document{flex:1;min-height:0;height:auto}
+.minutes-source{flex:1;min-height:120px;width:100%;resize:none;padding:12px;font:14px/1.6 ui-monospace,monospace}
+.minutes-editor>.primary{align-self:flex-start}

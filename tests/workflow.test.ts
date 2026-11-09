@@ -102,58 +102,87 @@ test('偽AIの全段階・履歴・配信範囲・中断再開を通す', async 
 });
 test('ローカルAPIのOrigin・token検証', () => { assert.throws(() => guard(new Request('http://127.0.0.1:3210/api/neo', { headers: { host: '127.0.0.1:3210', origin: 'https://example.com' } }))); assert.throws(() => guard(new Request('http://127.0.0.1:3210/api/neo', { method: 'POST', headers: { host: '127.0.0.1:3210' } }), true)); assert.doesNotThrow(() => guard(new Request('http://127.0.0.1:3210/api/neo', { method: 'POST', headers: { host: '127.0.0.1:3210', 'x-neo-token': token } }), true)); assert.throws(() => guard(new Request('http://evil.example/api/neo', { headers: { host: 'evil.example' } }))); });
 
-test('議事録：簡易は止めず、詳細は台帳の修正・承認後に独立レビューと手直し', async () => {
+test('議事録：全レベルで止まらず詳細・レビュー・手直し、手動保存とAI修正は最新本文を使う', async () => {
     const previous = process.env.NEO_BROWSER;
     process.env.NEO_BROWSER = 'none';
     try {
         const i: Input = { ...input, purpose: '議事録', palette: 'auto', material: '[question] 会議の架空素材' };
-        const simple = await create(i, []);
-        const done = await waitFor(simple.id, 'done');
-        assert.equal(done.asked, false);
-        assert.equal(done.review, '');
-        assert.equal(done.paletteCandidates, undefined);
-        assert.match(done.pdfNote!, /PDFは作れませんでした（Chrome か Edge が必要）/);
-        assert.ok(done.logs.some(line => line.includes(done.pdfNote!)));
-        assert.deepEqual(done.files.sort(), ['ledger.md', 'minutes.md']);
-        assert.match(done.minutes!, /\| 担当 \| 内容 \| 期限 \|/);
-        for (const text of ['冒頭情報', '決定事項', '宿題', '論点と経緯', '次回の確認事項', '「計画を確認します」', 'xx', '（未確認）', '未確認事項']) assert.ok(done.minutes!.includes(text));
-        assert.ok(await safeFile(done.id, ['minutes.md']));
-        assert.ok(await safeFile(done.id, ['ledger.md']));
-        for (const file of ['design.md', 'question.json', 'palette-candidates.json', 'index.html', 'slides.pptx', 'preview']) await assert.rejects(fs.stat(path.join(requestDir(done.id), file)));
-        const detailed = await create({ ...i, level: '詳細' }, []);
-        let design = await waitFor(detailed.id, 'design');
-        assert.match(design.design, /台帳/);
-        assert.equal(design.minutes, '');
-        assert.equal(design.paletteCandidates, undefined);
-        await act(design.id, 'design-revise', { feedback: '期限の不明点を確認' });
-        design = await waitFor(design.id, 'design');
-        assert.match(design.design, /期限の不明点を確認/);
-        await act(design.id, 'approve');
-        const complete = await waitFor(design.id, 'done');
-        assert.equal(complete.reviewer, 'codex');
-        assert.match(complete.review, /経緯の飛躍/);
-        assert.ok(complete.timings['レビュー'] !== undefined && complete.timings['手直し'] !== undefined);
-        const firstMinutes = complete.minutes;
-        await fs.writeFile(path.join(requestDir(complete.id), 'minutes.pdf'), '%PDF-stale');
-        await act(complete.id, 'revise', { feedback: '決定事項を確認' });
-        const revised = await waitFor(complete.id, 'done');
-        assert.equal(revised.revisionUsed, true);
-        assert.notEqual(revised.minutes, firstMinutes);
-        assert.ok(revised.pdfNote);
-        assert.ok(!revised.files.includes('minutes.pdf'));
-        await assert.rejects(fs.stat(path.join(requestDir(complete.id), 'minutes.pdf')));
-        assert.match(await fs.readFile(path.join(requestDir(complete.id), 'revision.md'), 'utf8'), /決定事項を確認/);
-        // The legacy purpose is kept for display and continues to use the slide path.
-        const old = { ...done, input: { ...done.input, purpose: '会議まとめ' } } as unknown as RecordData;
-        await save(old);
-        assert.equal((await readRecord(old.id)).input.purpose, '会議まとめ');
-        assert.ok((await list()).some(r => r.id === old.id));
-        for (const stage of ['設計図', '本番', '検査', 'レビュー', '手直し'] as const) {
-            const protocol = minutesProtocol(complete, stage, 'request', 'prompts');
-            assert.doesNotMatch(protocol, /スライド|pptx|HTML|preview|配色|design\.md|evidence\.md|icons\.md|interactive\.md/);
-            assert.match(protocol, /meeting\.md/);
-            assert.match(protocol, /minutes\.md/);
+        for (const level of ['簡易', '詳細', 'AUTO'] as const) {
+            const created = await create({ ...i, level }, []);
+            await assert.rejects(() => act(created.id, 'save-minutes', { minutes: '生成中には保存不可' }), /実行中|完了した議事録/);
+            const done = await waitFor(created.id, 'done');
+            assert.equal(done.input.level, '詳細');
+            assert.equal(done.selectedLevel, '詳細');
+            assert.equal(done.phase, 'production');
+            assert.equal(done.asked, false);
+            assert.equal(done.reason, '');
+            assert.equal(done.paletteCandidates, undefined);
+            assert.equal(done.reviewer, 'codex');
+            assert.match(done.review, /経緯の飛躍/);
+            assert.ok(done.timings['レビュー'] !== undefined && done.timings['手直し'] !== undefined);
+            assert.match(done.pdfNote!, /PDFは作れませんでした（Chrome か Edge が必要）/);
+            assert.deepEqual(done.files.sort(), ['ledger.md', 'minutes.md']);
+            for (const text of ['冒頭情報', '決定事項', '宿題', '論点と経緯', '次回の確認事項', '「計画を確認します」', 'xx', '（未確認）', '未確認事項']) assert.ok(done.minutes!.includes(text));
+            for (const file of ['review.md', 'revision.md', 'minutes.md']) assert.ok((await fs.stat(path.join(requestDir(done.id), file))).size > 0);
+            for (const file of ['design.md', 'decision.json', 'question.json', 'palette-candidates.json', 'index.html', 'slides.pptx', 'preview']) await assert.rejects(fs.stat(path.join(requestDir(done.id), file)));
+            assert.ok(await safeFile(done.id, ['minutes.md']));
+            assert.ok(await safeFile(done.id, ['ledger.md']));
+            await assert.rejects(() => act(done.id, 'save-minutes', { minutes: 'a'.repeat(500001) }), /50万/);
+            await assert.rejects(() => act(done.id, 'save-minutes', { minutes: null }), /50万/);
+            const manual = done.minutes + '\n手動編集を保持する。\n';
+            await fs.writeFile(path.join(requestDir(done.id), 'minutes.pdf'), '%PDF-stale');
+            const saving = act(done.id, 'save-minutes', { minutes: manual, path: '../other.md' });
+            await assert.rejects(() => act(done.id, 'save-minutes', { minutes: '重複保存' }), /処理中/);
+            await assert.rejects(() => act(done.id, 'revise', { feedback: '同時操作' }), /処理中/);
+            const saved = await saving;
+            assert.equal(saved.minutes, manual);
+            assert.equal(await fs.readFile(path.join(requestDir(done.id), 'minutes.md'), 'utf8'), manual);
+            assert.equal(saved.status, 'done');
+            assert.equal(saved.revisionUsed, false);
+            assert.ok(saved.pdfNote);
+            assert.ok(!saved.files.includes('minutes.pdf'));
+            await assert.rejects(fs.stat(path.join(requestDir(done.id), 'minutes.pdf')));
+            await act(done.id, 'revise', { feedback: '決定事項を確認' });
+            await assert.rejects(() => act(done.id, 'save-minutes', { minutes: 'AI修正中' }), /実行中|完了した議事録/);
+            const revised = await waitFor(done.id, 'done');
+            assert.ok(revised.minutes!.startsWith(manual));
+            assert.equal(revised.revisionUsed, true);
+            assert.match(await fs.readFile(path.join(requestDir(done.id), 'revision.md'), 'utf8'), /決定事項を確認/);
+            const final = revised.minutes + '\nAI修正後の手動編集。\n';
+            assert.equal((await act(done.id, 'save-minutes', { minutes: final })).minutes, final);
+            for (const stage of ['設計図', '本番', '検査', 'レビュー', '手直し'] as const) {
+                const protocol = minutesProtocol(done, stage, 'request', 'prompts');
+                assert.doesNotMatch(protocol, /スライド|pptx|HTML|preview|配色|design\.md|evidence\.md|icons\.md|interactive\.md/);
+                assert.match(protocol, /meeting\.md/);
+                assert.match(protocol, /minutes\.md/);
+                if (stage === '手直し') assert.match(protocol, /最新の minutes\.md/);
+            }
         }
+        const slide = await create(input, []);
+        await waitFor(slide.id, 'done');
+        await assert.rejects(() => act(slide.id, 'save-minutes', { minutes: '拒否' }), /完了した議事録/);
+        const created = await create(i, []);
+        const old = await waitFor(created.id, 'done');
+        // Previous simple/detailed completed records remain editable without migrating them.
+        for (const level of ['簡易', '詳細'] as const) {
+            old.input.level = old.selectedLevel = level;
+            await save(old);
+            assert.equal((await current(old.id)).input.level, level);
+            assert.equal((await act(old.id, 'save-minutes', { minutes: '# 旧議事録 ' + level })).status, 'done');
+        }
+        // A saved legacy ledger wait can still be approved and completed.
+        old.input.level = old.selectedLevel = '詳細';
+        old.status = 'design'; old.phase = 'design'; old.stage = '設計図';
+        old.revisionUsed = false;
+        await save(old);
+        await assert.rejects(() => act(old.id, 'save-minutes', { minutes: '旧台帳待ちには保存不可' }), /完了した議事録/);
+        await act(old.id, 'approve');
+        const complete = await waitFor(old.id, 'done');
+        assert.equal(complete.reviewer, 'codex');
+        const legacy = { ...complete, input: { ...complete.input, purpose: '会議まとめ' } } as unknown as RecordData;
+        await save(legacy);
+        assert.equal((await readRecord(legacy.id)).input.purpose, '会議まとめ');
+        assert.ok((await list()).some(r => r.id === legacy.id));
     } finally { if (previous === undefined) delete process.env.NEO_BROWSER; else process.env.NEO_BROWSER = previous; }
 });
 

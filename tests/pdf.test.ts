@@ -8,6 +8,16 @@ import path from 'node:path';
 import { createMinutesPDF, findBrowser, minutesHTML, PDF_NOTE } from '../server/pdf';
 import { fakeMinutes } from '../server/fake';
 
+// Inspect only this process's temporary files, even when another test prints concurrently.
+const systemTemporary = path.resolve(os.tmpdir());
+const suiteTemporary = await fs.mkdtemp(path.join(systemTemporary, 'neo-pdf-suite-'));
+mock.method(os, 'tmpdir', () => suiteTemporary);
+after(async () => {
+    mock.restoreAll(); syncBuiltinESMExports();
+    assert.equal(path.dirname(suiteTemporary), systemTemporary);
+    await fs.rm(suiteTemporary, { recursive: true, force: true });
+});
+
 // Restricted Windows test accounts cannot start Chrome's renderer sandbox.
 // This opt-in changes only the test process; production PDF launch arguments stay intact.
 if (process.env.NEO_TEST_NO_SANDBOX === '1') {

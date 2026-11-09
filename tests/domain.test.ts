@@ -25,14 +25,18 @@ test('議事録：配色を無視・依頼文と形式に依存しない専用�
     assert.match(historyKey(i, '簡易'), /\|minutes$/);
     assert.notEqual(historyKey(i, '簡易'), historyKey(input, '簡易'));
     assert.equal(historyKey(i, '詳細'), historyKey({ ...i, formats: ['pptx', 'html'] }, '詳細'));
-    assert.deepEqual(estimate(i, '簡易', 'design'), [2 * 60000, 5 * 60000]);
-    assert.deepEqual(estimate(i, '簡易', 'production'), [6 * 60000, 10 * 60000]);
-    assert.deepEqual(estimate(i, '詳細', 'design'), [4 * 60000, 8 * 60000]);
+    for (const level of ['簡易', '詳細', 'AUTO', null, 'invalid']) {
+        assert.equal(validateInput({ ...i, level }, defaults).level, '詳細');
+        assert.deepEqual(estimate(i, level as Input['level'], 'design'), [15 * 60000, 25 * 60000]);
+        assert.deepEqual(estimate(i, level as Input['level'], 'production'), [15 * 60000, 25 * 60000]);
+        assert.match(requestText({ ...i, level } as Input, palettes), /版：詳細・止まらず完成まで（固定）/);
+    }
     assert.deepEqual(estimate(i, '詳細', 'production'), [15 * 60000, 25 * 60000]);
     const key = historyKey(i, '詳細');
+    assert.deepEqual(estimate(i, '詳細', 'design', [60, 120, 300].map(ms => ({ key, phase: 'design' as const, ms }))), [15 * 60000, 25 * 60000]);
     assert.deepEqual(estimate(i, '詳細', 'production', [60, 120, 300].map(ms => ({ key, phase: 'production' as const, ms }))), [96, 144]);
     for (const level of ['簡易', '詳細'] as const) {
-        const stages = level === '簡易' ? ['本番', '検査'] : ['本番', '検査', 'レビュー', '手直し'];
+        const stages = ['保存', '設計図', '本番', '検査', 'レビュー', '手直し'];
         let previous = -1;
         for (const stage of stages) {
             const r = { input: i, status: 'running', stage, phase: 'production', selectedLevel: level, stageStart: 100, phaseStart: 100, activeMs: 0 } as RecordData;
