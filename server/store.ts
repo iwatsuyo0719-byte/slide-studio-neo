@@ -154,6 +154,6 @@ export async function artifacts(r: RecordData) {
             r.review = '';
             continue;
         }
-        r[key] = await fs.readFile(path.join(base, key + '.md'), 'utf8').catch(() => '');
+        r[key] = (await fs.readFile(path.join(base, key + '.md'), 'utf8').catch(() => '')).replace(/^\uFEFF/, '');
     }
 }
