@@ -213,6 +213,8 @@ async function slideAutoCheck(r: RecordData, job: Job) {
         const palette = (await palettes()).find(p => p.id === (r.chosenPalette || r.input.palette));
         const result = await inspectSlides(requestDir(r.id), r.input, palette, job.controller.signal, c => { job.child = c; });
         r.inspectNote = result.failed.length ? '機械検査で不合格：' + result.failed.join('・') : undefined;
+        // PowerPointで画像化できなかった pptx は、LibreOffice があればそちらで画像を作る
+        if (!result.rendered && !r.input.formats.includes('html')) await previews(r, job);
         await log(r, '機械検査（' + Math.round((Date.now() - started) / 1000) + '秒、画像' + result.rendered + '枚）' + (r.inspectNote ? '：' + r.inspectNote : '：不合格なし'));
     } catch (error) {
         if (job.controller.signal.aborted) throw error;

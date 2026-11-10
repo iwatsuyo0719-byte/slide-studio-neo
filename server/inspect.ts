@@ -3,7 +3,8 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { findBrowser } from './pdf';
 import { locate, execute, terminate } from './cli';
 import { atomicText } from './store';
@@ -43,10 +44,11 @@ function toMarkdown(result: InspectResult, note: string) {
 
 // ---- HTML：Chrome/Edge を DevTools で操作し、測定と画像化を1回の起動で行う
 async function withBrowser<T>(fn: (send: (m: string, p?: unknown) => Promise<any>) => Promise<T>, signal?: AbortSignal, onChild?: (c: ChildProcess) => void): Promise<T> {
+    signal?.throwIfAborted();
     const browser = await findBrowser();
     if (!browser) throw Error('Chrome か Edge が見つかりません');
     const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-inspect-'));
-    const child = spawn(browser.bin, [...browser.prefix, '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(browser.bin, [...browser.prefix, '--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     onChild?.(child);
     const abort = () => { void terminate(child); };
     signal?.addEventListener('abort', abort, { once: true });
@@ -65,6 +67,8 @@ async function withBrowser<T>(fn: (send: (m: string, p?: unknown) => Promise<any
         let id = 0;
         const pending = new Map<number, (m: any) => void>();
         ws.onmessage = e => { const m = JSON.parse(String(e.data)); if (m.id && pending.has(m.id)) { pending.get(m.id)!(m); pending.delete(m.id); } };
+        // ブラウザが落ちた・止めた時は、待っている問い合わせをすぐ失敗させる（30秒待たない）
+        ws.onclose = () => { for (const [, done] of pending) done({ error: { message: 'ブラウザとの接続が切れました' } }); pending.clear(); };
         const send = (method: string, params: unknown = {}) => new Promise<any>((resolve, reject) => {
             const n = ++id;
             const timer = setTimeout(() => { pending.delete(n); reject(Error('ブラウザの応答が時間切れです：' + method)); }, 30000);
@@ -112,7 +116,7 @@ async function inspectHTML(dir: string, signal?: AbortSignal, onChild?: (c: Chil
     return withBrowser(async send => {
         await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await send('Page.enable');
-        await send('Page.navigate', { url: 'file:///' + path.join(dir, 'index.html').replaceAll('\\', '/') });
+        await send('Page.navigate', { url: pathToFileURL(path.join(dir, 'index.html')).href });
         for (let n = 0; n < 60; n++) {
             const ready = await send('Runtime.evaluate', { expression: 'document.readyState === "complete" && (!document.fonts || document.fonts.status === "loaded")', returnByValue: true });
             if (ready.result.value) break;
@@ -182,16 +186,27 @@ for s in p.slides:
     out['slides'].append(info)
 print(json.dumps(out))
 `;
-const PPT_EXPORT = `Set app = CreateObject("PowerPoint.Application")
+// 失敗しても必ず閉じる。利用者が開いているPowerPointには触らない（呼ぶ前に起動中か確かめ、起動中なら画像化しない）
+const PPT_EXPORT = `On Error Resume Next
+Set app = CreateObject("PowerPoint.Application")
+If Err.Number <> 0 Then WScript.Quit 2
 Set pres = app.Presentations.Open(WScript.Arguments(0), True, False, False)
+If Err.Number <> 0 Then
+  app.Quit
+  WScript.Quit 3
+End If
 For i = 1 To pres.Slides.Count
   pres.Slides(i).Export WScript.Arguments(1) & "\\page-" & Right("0" & i, 2) & ".png", "PNG", 1920, 1080
 Next
+failed = Err.Number
 pres.Close
 app.Quit
+If failed <> 0 Then WScript.Quit 4
 `;
+const powerPointRunning = () => new Promise<boolean>(resolve => execFile('tasklist', ['/FI', 'IMAGENAME eq POWERPNT.EXE', '/NH'], { windowsHide: true }, (error, out) => resolve(!error && /POWERPNT\.EXE/i.test(String(out)))));
+const killPowerPoint = () => new Promise<void>(resolve => execFile('taskkill', ['/IM', 'POWERPNT.EXE', '/F'], { windowsHide: true }, () => resolve()));
 
-async function inspectPPTX(dir: string, signal?: AbortSignal, onChild?: (c: ChildProcess) => void) {
+async function inspectPPTX(dir: string, render: boolean, signal?: AbortSignal, onChild?: (c: ChildProcess) => void) {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-pptx-'));
     try {
         const script = path.join(tmp, 'probe.py');
@@ -199,18 +214,28 @@ async function inspectPPTX(dir: string, signal?: AbortSignal, onChild?: (c: Chil
         const python = await locate('python') || await locate('python3');
         let probe: any = null;
         if (python) {
-            const out = await execute(python, [script, path.join(dir, 'slides.pptx')], dir, undefined, onChild, signal, 60000).catch(() => '');
+            const out = await execute(python, [script, path.join(dir, 'slides.pptx')], dir, undefined, onChild, signal, 60000).catch(() => { signal?.throwIfAborted(); return ''; });
             try { probe = JSON.parse(out.trim().split('\n').pop() || ''); } catch { probe = null; }
         }
         const preview = path.join(dir, 'preview');
         await fs.mkdir(preview, { recursive: true });
-        let rendered = false;
-        if (process.platform === 'win32') {
-            const vbs = path.join(tmp, 'export.vbs');
-            await fs.writeFile(vbs, PPT_EXPORT);
-            rendered = await execute({ bin: 'cscript', prefix: [] }, ['//nologo', vbs, path.join(dir, 'slides.pptx'), preview], dir, undefined, onChild, signal, 120000).then(() => true).catch(() => false);
+        let rendered = false, note = '';
+        signal?.throwIfAborted();
+        if (render && process.platform === 'win32') {
+            if (await powerPointRunning()) note = 'PowerPointが起動中のため画像化しませんでした（利用中の画面に触らないため）';
+            else {
+                const vbs = path.join(tmp, 'export.vbs');
+                await fs.writeFile(vbs, PPT_EXPORT);
+                try {
+                    rendered = await execute({ bin: 'cscript', prefix: [] }, ['//nologo', vbs, path.join(dir, 'slides.pptx'), preview], dir, undefined, onChild, signal, 120000).then(() => true, () => false);
+                } finally {
+                    // 時間切れ・中断・失敗で、このツールが起動した PowerPoint が残っていれば閉じる（起動前は動いていなかったことを確認済み）
+                    if (await powerPointRunning()) await killPowerPoint();
+                }
+                signal?.throwIfAborted();
+            }
         }
-        return { probe, rendered };
+        return { probe, rendered, note };
     } finally { await fs.rm(tmp, { recursive: true, force: true }).catch(() => { }); }
 }
 
@@ -221,7 +246,8 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
     const texts: string[] = [], colors: string[] = [];
     const notes: string[] = [];
     const preview = path.join(dir, 'preview');
-    for (const old of await fs.readdir(preview).catch(() => [] as string[])) if (/^page-\d+\.png$/.test(old)) await fs.rm(path.join(preview, old), { force: true });
+    // 画像はツールが作り直すので、以前の画像（AIが作ったものを含む）は消す
+    for (const old of await fs.readdir(preview).catch(() => [] as string[])) if (/\.(png|jpe?g|pdf)$/i.test(old)) await fs.rm(path.join(preview, old), { force: true });
     if (input.formats.includes('html') && await fs.stat(path.join(dir, 'index.html')).catch(() => null)) {
         try {
             const pages = await inspectHTML(dir, signal, onChild);
@@ -235,13 +261,15 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
             checks['はみ出し（html）'] = { status: over.length ? '不合格' : '合格', evidence: over.length ? 'ページの外に出た文字：' + over.map(p => `P${p.i} ${p.n}か所`).join('、') : 'なし' };
             pages.forEach(p => { texts.push(...p.texts); colors.push(...p.colors); });
         } catch (error) {
+            signal?.throwIfAborted();
             checks['描画（html）'] = { status: '未判定', evidence: '画像化・測定ができませんでした：' + String(error) };
         }
     }
     let rendered = (await fs.readdir(preview).catch(() => [] as string[])).filter(f => /^page-\d+\.png$/.test(f)).length;
     if (input.formats.includes('pptx') && await fs.stat(path.join(dir, 'slides.pptx')).catch(() => null)) {
         if (input.formats.includes('html')) notes.push('html と pptx の両方がある時、画像は html を優先し、pptx は構造だけ測る');
-        const { probe, rendered: pptRendered } = await inspectPPTX(dir, signal, onChild).catch(() => ({ probe: null, rendered: false }));
+        // html と pptx の両方がある時は、画像は html のものを使い、PowerPointでは画像化しない（上書きしない）
+        const { probe, rendered: pptRendered, note } = await inspectPPTX(dir, !input.formats.includes('html'), signal, onChild).catch(error => { signal?.throwIfAborted(); return { probe: null, rendered: false, note: String(error) }; });
         if (probe) {
             const sizeOk = Math.round(probe.width_pt) === 960 && Math.round(probe.height_pt) === 540;
             checks['寸法（pptx）'] = { status: sizeOk ? '合格' : '不合格', evidence: `${Math.round(probe.width_pt)}×${Math.round(probe.height_pt)}pt、${probe.slides.length}枚` };
@@ -257,7 +285,7 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
         } else checks['構造（pptx）'] = { status: '未判定', evidence: 'python と python-pptx で読めませんでした' };
         if (!input.formats.includes('html')) {
             rendered = (await fs.readdir(preview).catch(() => [] as string[])).filter(f => /^page-\d+\.png$/.test(f)).length;
-            checks['描画（pptx）'] = pptRendered && rendered ? { status: '合格', evidence: `PowerPointで開いて${rendered}枚を画像化` } : { status: '未判定', evidence: 'PowerPointで画像化できませんでした（PowerPointが無い・開けない）' };
+            checks['描画（pptx）'] = pptRendered && rendered ? { status: '合格', evidence: `PowerPointで開いて${rendered}枚を画像化` } : { status: '未判定', evidence: note || 'PowerPointで画像化できませんでした（PowerPointが無い・開けない）' };
         }
     }
     Object.assign(checks, commonChecks(texts, colors, material, design, palette));
