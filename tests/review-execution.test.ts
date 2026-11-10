@@ -125,7 +125,7 @@ test('CLI境界（起動はモック）：議事録は同じAIでレビューと
                     assert.ok(!args.includes('--resume') && !args.includes('--continue') && !args.includes('resume'));
                     if (provider === 'codex') {
                         assert.equal(args[args.indexOf('--sandbox') + 1], purpose === '議事録' ? 'workspace-write' : 'read-only');
-                        assert.ok(args.includes('--ignore-user-config'));
+                        assert.ok(!args.includes('--ignore-user-config'));
                     } else {
                         assert.equal(args[args.indexOf('--tools') + 1], purpose === '議事録' ? 'Read,Write,Edit' : 'Read');
                         assert.equal(args[args.indexOf('--permission-mode') + 1], 'dontAsk');

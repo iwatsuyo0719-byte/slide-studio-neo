@@ -35,7 +35,8 @@ test('Codexは生成・レビューとも利用者の設定を無視し、新し
     for (const readOnly of [false, true]) {
         const args = cliArgs({ provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' }, '詳細', defaults, 'C:/request', '指示', readOnly);
         assert.equal(args[0], 'exec');
-        assert.ok(args.includes('--ignore-user-config'));
+        // 利用者の config.toml（Windowsのサンドボックス設定など）が無いと Codex がファイルを読み書きできないため、--ignore-user-config は付けない
+        assert.ok(!args.includes('--ignore-user-config'));
         assert.equal(args[args.indexOf('--sandbox') + 1], readOnly ? 'read-only' : 'workspace-write');
         assert.ok(!args.includes('resume'));
     }
