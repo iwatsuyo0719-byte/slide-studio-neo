@@ -31,7 +31,7 @@ export interface Input {
     material: string;
     ai: AIChoice;
 }
-export type Stage = '保存' | '設計図' | '本番' | '検査' | 'レビュー' | '手直し';
+export type Stage = '作る' | 'PDF' | '保存' | '設計図' | '本番' | '検査' | 'レビュー' | '手直し';
 export type Status = 'running' | 'question' | 'design' | 'done' | 'error' | 'stopped';
 export interface Question {
     text: string;
@@ -39,6 +39,7 @@ export interface Question {
 }
 export interface RecordData {
     minutes?: string;
+    minutesCheckNote?: string;
     pdfNote?: string;
     pdfPages?: number;
     pdfPageNote?: string;
@@ -151,15 +152,12 @@ export function estimate(i: Input, level: Level, phase: 'design' | 'production',
     number,
     number
 ] {
-    if (isMinutes(i)) { level = '詳細'; phase = 'production'; }
+    if (isMinutes(i)) return [5 * 60000, 10 * 60000];
     const samples = history.filter(h => h.key === historyKey(i, level, s) && h.phase === phase).map(h => h.ms).sort((a, b) => a - b);
     if (samples.length >= 3) {
         const mid = Math.floor(samples.length / 2);
         const med = samples.length % 2 ? samples[mid] : (samples[mid - 1] + samples[mid]) / 2;
         return [med * .8, med * 1.2];
-    }
-    if (isMinutes(i)) {
-        return [15 * 60000, 25 * 60000];
     }
     // 2026-11-09 実測1件（簡易HTML：設計図4分・本番16分・検査10分）から更新。
     let mins: [
@@ -181,9 +179,9 @@ export function progress(r: RecordData, now: number, range: [
     if (r.status === 'design')
         return { percent: 99, remaining: 0, overtime: false };
     const continuousMinutes = r.input && isMinutes(r.input);
-    const stages: Stage[] = continuousMinutes ? ['保存', '設計図', '本番', '検査', 'レビュー', '手直し'] : r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
+    const stages: Stage[] = continuousMinutes ? minutesStages(r.input) : r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
     // 設計図は別メーター。本番:検査は実測16:10、詳細のレビュー8分・手直し8分は推定。
-    const weights = continuousMinutes ? [.02, .18, .35, .15, .15, .15] : r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
+    const weights = continuousMinutes ? (r.input.audience === '社内' ? [.95, .05] : [.60, .35, .05]) : r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
     const index = Math.max(0, stages.indexOf(r.stage));
     const base = weights.slice(0, index).reduce((a, b) => a + b, 0);
     const elapsed = Math.max(0, (r.status === 'running' ? now : r.updated) - r.stageStart);
@@ -209,3 +207,5 @@ export function requestTitle(input: Input, files: { name: string }[] = []): stri
     const title = input.title.trim() || line?.slice(0, 24) || (!isMinutes(input) && files[0]?.name) || fallback;
     return title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\.+/g, '-').slice(0, 60) || fallback;
 }
+
+export function minutesStages(input: Pick<Input, 'audience'>): Stage[] { return input.audience === '社内' ? ['作る', 'PDF'] : ['作る', 'レビュー', 'PDF']; }

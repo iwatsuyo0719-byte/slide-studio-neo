@@ -73,7 +73,7 @@ for (const mode of ['shorten-failure', 'shorten-abort', 'pdf-failure', 'pdf-abor
             assert.equal(completed.pdfPages, 4);
             assert.equal(completed.pdfPageNote, 'PDFは 4 枚です（目安2枚以下・多くて3枚）');
             assert.ok(completed.files.includes('minutes.pdf'));
-            assert.match(completed.reviewNote!, /レビューなしで完了/);
+            assert.equal(completed.reviewNote, undefined);
             const dir = requestDir(id);
             if (mode !== 'success') {
                 assert.equal(completed.minutes, originalMinutes);
@@ -101,11 +101,12 @@ test('レビュー失敗の後のrevise：議事録とスライドの省略注�
                 await act(created.id, 'approve');
             }
             const first = await done(created.id);
-            assert.match(first.reviewNote!, /レビューなしで完了/);
+            if (purpose === '提案') assert.match(first.reviewNote!, /レビューなしで完了/);
+            else assert.equal(first.reviewNote, undefined);
             await act(created.id, 'revise', { feedback: '見出しを短く' });
             const revised = await done(created.id);
             assert.equal(revised.reviewNote, undefined);
-            assert.ok(revised.timings['手直し']);
+            assert.ok(revised.timings[purpose === '議事録' ? '作る' : '手直し']);
         }
     } finally { process.env.NEO_BROWSER = process.execPath; }
 });

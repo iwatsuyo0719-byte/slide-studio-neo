@@ -107,11 +107,11 @@ test('偽AIの全段階・履歴・配信範囲・中断再開を通す', async 
 });
 test('ローカルAPIのOrigin・token検証', () => { assert.throws(() => guard(new Request('http://127.0.0.1:3210/api/neo', { headers: { host: '127.0.0.1:3210', origin: 'https://example.com' } }))); assert.throws(() => guard(new Request('http://127.0.0.1:3210/api/neo', { method: 'POST', headers: { host: '127.0.0.1:3210' } }), true)); assert.doesNotThrow(() => guard(new Request('http://127.0.0.1:3210/api/neo', { method: 'POST', headers: { host: '127.0.0.1:3210', 'x-neo-token': token } }), true)); assert.throws(() => guard(new Request('http://evil.example/api/neo', { headers: { host: 'evil.example' } }))); });
 
-test('議事録：全レベルで止まらず詳細・レビュー・手直し、手動保存とAI修正は最新本文を使う', async () => {
+test('議事録：全レベルで社外2回起動、手動保存とAI修正は最新本文を使う', async () => {
     const previous = process.env.NEO_BROWSER;
     process.env.NEO_BROWSER = 'none';
     try {
-        const i: Input = { ...input, purpose: '議事録', palette: 'auto', material: '[question] 会議の架空素材' };
+        const i: Input = { ...input, purpose: '議事録', audience: '社外', palette: 'auto', material: '[question] 会議の架空素材' };
         for (const level of ['簡易', '詳細', 'AUTO'] as const) {
             const created = await create({ ...i, level }, []);
             await assert.rejects(() => act(created.id, 'save-minutes', { minutes: '生成中には保存不可' }), /実行中|完了した議事録/);
@@ -123,8 +123,9 @@ test('議事録：全レベルで止まらず詳細・レビュー・手直し�
             assert.equal(done.reason, '');
             assert.equal(done.paletteCandidates, undefined);
             assert.equal(done.reviewed, true);
+            assert.equal(done.logs.filter(l => /いまの段階：(作る|レビュー)$/.test(l)).length, 2);
             assert.match(done.review, /経緯の飛躍/);
-            assert.ok(done.timings['レビュー'] !== undefined && done.timings['手直し'] !== undefined);
+            assert.ok(done.timings['作る'] !== undefined && done.timings['レビュー'] !== undefined && done.timings['手直し'] === undefined);
             assert.match(done.pdfNote!, /PDFは作れませんでした（Chrome か Edge が必要）/);
             assert.deepEqual(done.files.sort(), ['ledger.md', 'minutes.md']);
             for (const text of ['冒頭情報', '決定事項', '宿題', '論点と経緯', '次回の確認事項', '「計画を確認します」', 'xx', '（未確認）', '未確認事項']) assert.ok(done.minutes!.includes(text));
@@ -155,7 +156,7 @@ test('議事録：全レベルで止まらず詳細・レビュー・手直し�
             assert.match(await fs.readFile(path.join(requestDir(done.id), 'revision.md'), 'utf8'), /決定事項を確認/);
             const final = revised.minutes + '\nAI修正後の手動編集。\n';
             assert.equal((await act(done.id, 'save-minutes', { minutes: final })).minutes, final);
-            for (const stage of ['設計図', '本番', '検査', 'レビュー', '手直し'] as const) {
+            for (const stage of ['作る', 'レビュー', '手直し'] as const) {
                 const protocol = minutesProtocol(done, stage, 'request', 'prompts');
                 assert.doesNotMatch(protocol, /スライド|pptx|HTML|preview|配色|design\.md|evidence\.md|icons\.md|interactive\.md/);
                 assert.match(protocol, /meeting\.md/);

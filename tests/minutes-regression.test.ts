@@ -79,7 +79,7 @@ test('PDF：rm失敗でも全段階はdone、手動保存は成功、PDFの処�
         }
         assert.ok(done);
         assert.equal(done.pdfNote, undefined);
-        assert.ok(done.timings['手直し']);
+        assert.ok(done.timings['作る']);
         const file = path.join(requestDir(created.id), 'minutes.md');
         const linked = path.join(requestDir(created.id), 'linked.md');
         const before = await fs.readFile(file, 'utf8');

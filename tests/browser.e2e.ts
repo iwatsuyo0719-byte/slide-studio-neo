@@ -159,8 +159,9 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.ok(await evaluate("[...document.querySelectorAll('.fixed-format')].some(e=>e.textContent==='詳細・止まらず完成まで（固定）')"));
         assert.equal(await evaluate("(()=>{" + label + "return [...document.querySelectorAll('fieldset button')].some(b=>['簡易','詳細','AUTO'].includes(label(b)))})()"), false);
         assert.ok(await evaluate("document.querySelector('.ai-chip').textContent.includes('high')"));
+        await click('社外');
         await material('週次会議。計画を確認することを決定した。担当と期限は未確認。');
-        assert.ok(await evaluate("document.querySelector('.estimate').textContent.includes('約15〜25分')"));
+        assert.ok(await evaluate("document.querySelector('.estimate').textContent.includes('約5〜10分')"));
         await evaluate("window.__minutesWaits=0; window.__minutesObserver=new MutationObserver(()=>{if(document.querySelector('.design-drawer,.edge-tab'))window.__minutesWaits++});window.__minutesObserver.observe(document.body,{childList:true,subtree:true})");
         await click('作成する');
         await wait("document.querySelector('.minutes-document h1')");
@@ -169,7 +170,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate("!!document.querySelector('.design-drawer,.edge-tab')"), false);
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
         await evaluate("document.querySelector('.minutes-ledger summary').click()");
-        assert.ok(await evaluate("document.querySelector('.minutes-ledger pre').textContent.includes('台帳')"));
+        assert.ok(await evaluate("document.querySelector('.minutes-ledger pre').textContent.includes('種別')"));
         assert.ok(await evaluate("document.querySelector('.minutes-document table')?.textContent.includes('担当')"));
         assert.equal(await evaluate("!!document.querySelector('iframe[title=成果物プレビュー],img[alt=pptxページのプレビュー]')"), false);
         assert.equal(await evaluate("[...document.querySelectorAll('a.download')].some(a=>a.textContent==='Markdownをダウンロード')"), true);
@@ -225,8 +226,9 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('保存してPDFを作り直す');
         await wait("document.querySelector('.minutes-document')?.textContent.includes('AI修正後の保存確認')");
         await click('新しく作る');
-        await material('週次会議 [long] [review-error]');
-        await evaluate("window.__invalidMinutesMeter=false;window.__shorteningObserved=false;window.__lengthObserver=new MutationObserver(()=>{const bar=document.querySelector('[role=progressbar]');if(bar && Number(bar.getAttribute('aria-valuenow'))>=100)window.__invalidMinutesMeter=true;if(document.querySelector('.logs')?.textContent.includes('分量の自動短縮（1回）')){window.__shorteningObserved=true;if(!document.querySelector('.stages .current')?.textContent.includes('手直し'))window.__invalidMinutesMeter=true;}});window.__lengthObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-valuenow']})");
+        await click('社内');
+        await material('週次会議 [long]');
+        await evaluate("window.__invalidMinutesMeter=false;window.__shorteningObserved=false;window.__lengthObserver=new MutationObserver(()=>{const bar=document.querySelector('[role=progressbar]');if(bar && Number(bar.getAttribute('aria-valuenow'))>=100)window.__invalidMinutesMeter=true;if(document.querySelector('.logs')?.textContent.includes('分量の自動短縮（1回）')){window.__shorteningObserved=true;if(!document.querySelector('.stages .current')?.textContent.includes('PDF'))window.__invalidMinutesMeter=true;}});window.__lengthObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-valuenow']})");
         // Return a real in-progress response at the shortening boundary, even if it lasts less than the 600ms UI polling interval.
         await evaluate("window.__lengthFetch=window.fetch;window.__shorteningCaptured=false;window.fetch=async(...args)=>{if(String(args[0]).startsWith('/api/neo?id=') && !window.__shorteningCaptured){for(let n=0;n<400;n++){const response=await window.__lengthFetch(...args);const state=await response.clone().json();if(state.minutesShortened || state.status==='done' || state.status==='error'){window.__shorteningCaptured=true;return response;}await new Promise(r=>setTimeout(r,10));}}return window.__lengthFetch(...args)}");
         await click('作成する');
@@ -237,17 +239,18 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('window.__shorteningObserved'), true);
         assert.equal(await evaluate("(()=>{const r=document.querySelector('.pdf-page-note').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight && r.right<=innerWidth})()"), true, '枚数はスクロールせず読める');
         await evaluate('window.__lengthObserver.disconnect()');
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('レビューを実行できなかったため、レビューなしで完了しました') && !document.querySelector('.results-text').textContent.includes('Codexレビュー未実施')"));
+        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('機械検査で不合格')"));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         const lengthShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'minutes-long-review-error-1280.png'), Buffer.from(lengthShot.data, 'base64'));
         await click('新しく作る');
+        await click('社外');
         await material('週次会議 [review-error]');
         await click('作成する');
-        await wait("document.querySelector('.result-top') && document.querySelector('.results-text').textContent.includes('レビューを実行できなかったため、レビューなしで完了しました')");
-        assert.equal(await evaluate("!!document.querySelector('.recovery')"), false);
+        await wait("document.querySelector('.recovery') && document.querySelector('.progress-note').textContent.includes('レビューの起動に失敗')");
+        assert.equal(await evaluate("!!document.querySelector('.recovery')"), true);
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
-        await click('新しく作る');
+        await click('入力に戻る');
         await click('提案');
         await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
         await wait("matchMedia('(prefers-reduced-motion: reduce)').matches");

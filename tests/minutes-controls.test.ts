@@ -29,8 +29,8 @@ const input: Input = { title: '分量とレビュー', audience: '社内', purpo
 async function waitFor(id: string, predicate: (r: RecordData) => boolean) {
     for (let n = 0; n < 1500; n++) {
         const r = await current(id);
-        if (r.status === 'error') assert.fail(r.error);
         if (predicate(r)) return r;
+        if (r.status === 'error') assert.fail(r.error);
         await delay(5);
     }
     assert.fail('状態待ちがタイムアウト');
@@ -38,17 +38,17 @@ async function waitFor(id: string, predicate: (r: RecordData) => boolean) {
 const done = (id: string) => waitFor(id, r => r.status === 'done');
 const shortens = (r: RecordData) => r.logs.filter(l => l.includes('分量の自動短縮（1回）')).length;
 async function start(purpose: Input['purpose'], markers: string) {
-    const r = await create({ ...input, purpose, material: input.material + markers }, []);
+    const r = await create({ ...input, purpose, audience: '社外', material: input.material + markers }, []);
     if (purpose !== '議事録') { await waitFor(r.id, r => r.status === 'design'); await act(r.id, 'approve'); }
     return r.id;
 }
-test('議事録protocol：本番・手直し・短縮は字数と保持事項、最新正本を指示する', () => {
+test('議事録protocol：作る・手直し・短縮は字数と保持事項、最新正本を指示する', () => {
     const r = { input } as RecordData;
-    for (const stage of ['本番', '手直し'] as const) {
+    for (const stage of ['作る', '手直し'] as const) {
         const text = minutesProtocol(r, stage, '/request', '/prompts');
         assert.match(text.split('\n')[0], /共通の開発ルール.*適用しません.*rules ファイルだけ/);
-        assert.match(text, /約1,600〜1,800字（A4 2枚以下）/);
-        assert.match(text, /決定事項・宿題・未確認事項は削らない/);
+        assert.match(text, /最新の minutes.md/);
+        if (stage === '作る') assert.match(text, /測れば分かる確認はツール/);
     }
     const text = minutesProtocol(r, '手直し', '/request', '/prompts', true);
     assert.match(text, /最新の minutes.md を元に/);
@@ -58,7 +58,7 @@ test('議事録protocol：本番・手直し・短縮は字数と保持事項、
 test('4枚：短縮1回でなお4枚でも完了し、短縮中のメーターは100%にならない', async () => {
     const id = await start('議事録', '[long]');
     const shortening = await waitFor(id, r => !!r.minutesShortened && r.status === 'running');
-    assert.equal(shortening.stage, '手直し');
+    assert.equal(shortening.stage, 'PDF');
     assert.equal(shortening.phase, 'production');
     assert.ok(progress(shortening, Date.now() + 99999999, [100, 200]).percent < 100);
     const r = await done(id);
@@ -119,13 +119,20 @@ test('PDF不可時は枚数・古い注記を消して短縮せず保存する',
         assert.equal(noPDF.pdfPages, undefined);
     } finally { process.env.NEO_BROWSER = process.execPath; }
 });
-test('議事録・スライド：同じAIで1回レビューし、失敗なら手直しせず完了', async () => {
+test('議事録は同じAIでレビューと直し、失敗時は停止。スライドは従来どおり', async () => {
     for (const purpose of ['議事録', '報告'] as const) {
         const reviewed = await done(await start(purpose, ''));
         assert.equal(reviewed.reviewed, true);
         assert.match(reviewed.review, /Claude Codeレビュー/);
-        assert.ok(reviewed.timings['手直し']);
-        const skipped = await done(await start(purpose, '[review-error]'));
+        assert.ok(reviewed.timings[purpose === '議事録' ? 'レビュー' : '手直し']);
+        assert.equal(Boolean(reviewed.timings['手直し']), purpose !== '議事録');
+        const failedId = await start(purpose, '[review-error]');
+        if (purpose === '議事録') {
+            const failed = await waitFor(failedId, r => r.status === 'error');
+            assert.equal(failed.resumeStage, 'レビュー');
+            continue;
+        }
+        const skipped = await done(failedId);
         assert.equal(skipped.error, undefined);
         assert.equal(skipped.reviewed, false);
         assert.equal(skipped.review, '');

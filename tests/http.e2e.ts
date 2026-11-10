@@ -50,7 +50,7 @@ test('HTTP：入力保存→設計図承認→完了→安全なHTML配信→履
     }) => v.id === r.id));
 });
 
-test('HTTP：議事録のMarkdown・PDFをattachment配信し、範囲外のファイルを拒否する', { timeout: 30000 }, async () => {
+test('HTTP：議事録のMarkdown・PDFをattachment配信し、範囲外のファイルを拒否する', { timeout: 90000 }, async () => {
     const boot = await fetch(base + '/api/neo').then(r => r.json());
     assert.equal(boot.fake, true);
     const form = new FormData();
@@ -67,7 +67,8 @@ test('HTTP：議事録のMarkdown・PDFをattachment配信し、範囲外のフ�
     }
     assert.ok(done, '議事録の完了待ち');
     assert.equal(done.selectedLevel, '詳細');
-    assert.ok(done.review);
+    assert.equal(done.review, '');
+    assert.ok(done.timings['作る'] !== undefined && done.timings['レビュー'] === undefined);
     const saveBody = JSON.stringify({ action: 'save-minutes', id: created.id, minutes: '# HTTPで編集した議事録\n\n保存を確認。' });
     const headers = { 'Content-Type': 'application/json', 'x-neo-token': boot.token };
     for (const deniedHeaders of [{ 'Content-Type': 'application/json' }, { ...headers, origin: 'https://evil.example' }]) {

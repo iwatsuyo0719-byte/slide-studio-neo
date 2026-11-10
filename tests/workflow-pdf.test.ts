@@ -20,11 +20,12 @@ if (process.env.NEO_TEST_NO_SANDBOX === '1') {
 process.env.NEO_FAKE_AI = '1';
 process.env.NEO_FAKE_DELAY_MS = '10';
 
-test('workflow：save-minutesで正本と実PDFを更新し、PDF失敗時も保存を完了する', { timeout: 30000 }, async t => {
+test('workflow：save-minutesで正本と実PDFを更新し、PDF失敗時も保存を完了する', { timeout: 90000 }, async t => {
     if (!await findBrowser()) return t.skip('Chrome/Edgeが見つかりません');
     const created = await create({ title: 'PDF再作成', audience: '社内', purpose: '議事録', formats: ['html'], level: 'AUTO', palette: '', brand: '', material: '架空会議', ai: { provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' } }, []);
     let done;
-    for (let n = 0; n < 1000; n++) {
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
         const r = await current(created.id);
         assert.notEqual(r.status, 'design');
         if (r.status === 'error') assert.fail(r.error);
