@@ -32,6 +32,11 @@ test('実CLI境界：エラー終了・空白応答・stderrだけなら独立�
     });
     let mode = 'exit-error';
     let calls: { provider: string; args: string[] }[] = [];
+    const read = fs.readFile.bind(fs);
+    t.mock.method(fs, 'readFile', async (...args: Parameters<typeof fs.readFile>) => {
+        const value = await read(...args);
+        return mode === 'empty' && /prompts[/\\]README.md$/.test(String(args[0])) ? String(value).replace('目的が議事録なら', '未知の用途なら') : value;
+    });
     t.mock.method(childProcess, 'spawn', (bin: string, args: string[], options: childProcess.SpawnOptions) => {
         const child = new EventEmitter() as childProcess.ChildProcess;
         Object.assign(child, { stdout: new PassThrough(), stderr: new PassThrough(), kill: () => { child.emit('close', null); return true; } });
@@ -42,6 +47,13 @@ test('実CLI境界：エラー終了・空白応答・stderrだけなら独立�
             if (args[0] === 'login') return emit('Logged in using ChatGPT');
             if (args[0] === 'auth') return emit(args[1] === '--help' ? 'status' : JSON.stringify({ loggedIn: true, authMethod: 'oauth' }));
             const protocol = args[0] === 'exec' ? args.at(-1)! : args[1];
+            const stage = protocol.match(/段階：([^。]+)/)![1];
+            if (mode === 'empty') assert.match(protocol, /README.md/);
+            else {
+                assert.ok(protocol.includes('rules-' + stage + '.md'));
+                assert.doesNotMatch(protocol, /README.md/);
+                assert.match(await fs.readFile(path.join(String(options.cwd), 'rules-' + stage + '.md'), 'utf8'), /出典：minutes.md/);
+            }
             if (protocol.includes('段階：レビュー')) {
                 if (mode === 'cancel' && provider === 'codex') return;
                 if (mode === 'both-error' || mode === 'exit-error' && provider === 'codex') return emit('', 1, 'CreateProcessWithLogonW 267');
@@ -77,6 +89,7 @@ test('実CLI境界：エラー終了・空白応答・stderrだけなら独立�
             }
             const completed = await waitFor(r.id, r => r.status === 'done');
             assert.equal(completed.reviewFallback, true);
+            if (mode === 'empty') assert.ok(completed.logs.some(l => l.includes('READMEを読む指示に戻します')));
             const reviewCalls = calls.filter(c => c.args.some(a => a.includes('段階：レビュー')));
             assert.deepEqual(reviewCalls.map(c => c.provider), ['codex', 'claude']);
             assert.equal(reviewCalls[0].args[reviewCalls[0].args.indexOf('--sandbox') + 1], 'read-only');
