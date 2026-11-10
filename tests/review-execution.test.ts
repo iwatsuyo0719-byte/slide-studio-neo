@@ -1,5 +1,7 @@
 import './workspace';
 import test from 'node:test';
+// CLIの起動はモックなので、成果物はダミー。ツールの描画・機械検査（P1）は走らせない
+process.env.NEO_INSPECT = '0';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -66,7 +68,8 @@ test('CLI境界（起動はモック）：議事録は同じAIでレビューと
                 if (mode === 'sandbox') return emit('判定保留', 0, 'Failed to create unified exec process');
                 if (mode === 'empty') return emit('  \n\t');
                 if (mode === 'stderr-only') return emit('', 0, 'CLI progress, no review output');
-                if (protocol.includes('check-auto.md')) {
+                // 議事録のレビュー（minutes.md を直す）。スライドのレビューも check-auto.md を読むので、minutes.md で見分ける
+                if (protocol.includes('check-auto.md') && protocol.includes('minutes.md')) {
                     await fs.writeFile(path.join(String(options.cwd), 'review.md'), '# 独立レビュー\n総合判定：確認済み');
                     await fs.writeFile(path.join(String(options.cwd), 'revision.md'), 'レビューで修正');
                     const latest = await fs.readFile(path.join(String(options.cwd), 'minutes.md'), 'utf8');
