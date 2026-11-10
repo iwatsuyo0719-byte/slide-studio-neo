@@ -24,13 +24,14 @@ async function waitFor(id: string, predicate: (r: RecordData) => boolean) {
     assert.fail('レビュー実行待ちタイムアウト');
 }
 
-test('実CLI境界：エラー終了・空白応答・stderrだけなら独立したread-only Claudeへ切り替える', async t => {
+test('実CLI境界：同じAIの新規read-onlyレビュー1回、失敗時に別AIを起動しない', async t => {
     const stat = fs.stat;
     t.mock.method(fs, 'stat', async (...args: Parameters<typeof fs.stat>) => {
         if (/(?:claude|codex)(?:\.exe)?$/.test(String(args[0]))) return { isFile: () => true } as Awaited<ReturnType<typeof fs.stat>>;
         return stat(...args);
     });
     let mode = 'exit-error';
+    let reviewChild: childProcess.ChildProcess | undefined;
     let calls: { provider: string; args: string[] }[] = [];
     const read = fs.readFile.bind(fs);
     t.mock.method(fs, 'readFile', async (...args: Parameters<typeof fs.readFile>) => {
@@ -52,13 +53,15 @@ test('実CLI境界：エラー終了・空白応答・stderrだけなら独立�
             else {
                 assert.ok(protocol.includes('rules-' + stage + '.md'));
                 assert.doesNotMatch(protocol, /README.md/);
-                assert.match(await fs.readFile(path.join(String(options.cwd), 'rules-' + stage + '.md'), 'utf8'), /出典：minutes.md/);
+                assert.match(await fs.readFile(path.join(String(options.cwd), 'rules-' + stage + '.md'), 'utf8'), /出典：/);
             }
             if (protocol.includes('段階：レビュー')) {
-                if (mode === 'cancel' && provider === 'codex') return;
-                if (mode === 'both-error' || mode === 'exit-error' && provider === 'codex') return emit('', 1, 'CreateProcessWithLogonW 267');
-                if (provider === 'codex') return mode === 'empty' ? emit('  \n\t') : emit('', 0, 'CLI progress, no review output');
-                return emit('# Claude Code独立レビュー\n総合判定：確認済み');
+                if (mode === 'cancel') { reviewChild = child; return; }
+                if (mode === 'exit-error') return emit('', 1, 'CreateProcessWithLogonW failed: 267');
+                if (mode === 'sandbox') return emit('判定保留', 0, 'Failed to create unified exec process');
+                if (mode === 'empty') return emit('  \n\t');
+                if (mode === 'stderr-only') return emit('', 0, 'CLI progress, no review output');
+                return emit('# 独立レビュー\n総合判定：確認済み');
             }
             await fs.writeFile(path.join(String(options.cwd), 'revision.md'), 'レビューに基づく手直し');
             await fs.appendFile(path.join(String(options.cwd), 'minutes.md'), '\n手直し済み');
@@ -68,45 +71,63 @@ test('実CLI境界：エラー終了・空白応答・stderrだけなら独立�
     });
     syncBuiltinESMExports();
     try {
-        for (mode of ['exit-error', 'empty', 'stderr-only', 'both-error', 'cancel']) {
-            process.env.NEO_FAKE_AI = '1';
-            const initial = await create({ title: 'CLIレビュー境界', audience: '社内', purpose: '議事録', formats: ['html'], level: '詳細', palette: '', brand: '', material: '会議記録', ai: { provider: 'claude', model: 'opus', depth: 'auto' } }, []);
-            await waitFor(initial.id, r => r.status === 'done');
-            const r = await readRecord(initial.id);
-            r.fake = false; r.status = 'stopped'; r.stage = r.resumeStage = 'レビュー';
-            delete r.timings['手直し'];
-            await save(r);
-            process.env.NEO_FAKE_AI = '0';
-            calls = [];
-            await act(r.id, 'resume');
-            if (mode === 'cancel') {
-                await waitFor(r.id, r => r.reviewer === 'codex' && r.stage === 'レビュー');
-                const stopped = await act(r.id, 'stop');
-                assert.equal(stopped.status, 'stopped');
-                assert.equal(stopped.reviewFallback, false);
-                assert.ok(!calls.some(c => c.provider === 'claude' && c.args.includes('-p')));
-                continue;
-            }
-            const completed = await waitFor(r.id, r => r.status === 'done');
-            assert.equal(completed.reviewFallback, true);
-            if (mode === 'empty') assert.ok(completed.logs.some(l => l.includes('READMEを読む指示に戻します')));
-            const reviewCalls = calls.filter(c => c.args.some(a => a.includes('段階：レビュー')));
-            assert.deepEqual(reviewCalls.map(c => c.provider), ['codex', 'claude']);
-            assert.equal(reviewCalls[0].args[reviewCalls[0].args.indexOf('--sandbox') + 1], 'read-only');
-            const claude = reviewCalls[1].args;
-            assert.equal(claude[claude.indexOf('--tools') + 1], 'Read');
-            assert.equal(claude[claude.indexOf('--permission-mode') + 1], 'dontAsk');
-            assert.ok(!claude.some(a => /^(?:Write|Edit|Bash)\(/.test(a)));
-            assert.ok(!claude.includes('--resume') && !claude.includes('--continue'));
-            assert.equal(completed.reviewer, mode === 'both-error' ? undefined : 'claude');
-            if (mode === 'both-error') {
-                assert.equal(completed.review, '');
-                assert.equal(completed.timings['手直し'], undefined);
-                assert.match(completed.reviewNote!, /レビューなし/);
-            } else {
-                assert.match(completed.review, /Codexレビュー未実施/);
-                assert.match(completed.review, /総合判定：確認済み/);
-                assert.ok(completed.timings['手直し']);
+        for (const purpose of ['議事録', '報告'] as const) {
+            for (const provider of ['claude', 'codex'] as const) {
+                for (mode of ['success', 'exit-error', 'empty', 'stderr-only', 'sandbox', 'cancel']) {
+                    if (purpose === '報告' && mode !== 'success') continue;
+                    if (mode === 'sandbox' && provider !== 'codex') continue;
+                    process.env.NEO_FAKE_AI = '1';
+                    const initial = await create({ title: 'CLIレビュー境界', audience: '社内', purpose, formats: ['html'], level: '詳細', palette: '026', brand: '', material: '会議記録', ai: { provider, model: provider === 'claude' ? 'opus' : 'gpt-6.1-sol', depth: 'auto' } }, []);
+                    if (purpose === '報告') {
+                        await waitFor(initial.id, r => r.status === 'design');
+                        await act(initial.id, 'approve');
+                    }
+                    await waitFor(initial.id, r => r.status === 'done');
+                    const r = await readRecord(initial.id);
+                    r.fake = false; r.status = 'stopped'; r.stage = r.resumeStage = 'レビュー';
+                    delete r.timings['手直し'];
+                    await save(r);
+                    process.env.NEO_FAKE_AI = '0';
+                    calls = [];
+                    reviewChild = undefined;
+                    await act(r.id, 'resume');
+                    if (mode === 'cancel') {
+                        await waitFor(r.id, r => r.stage === 'レビュー' && !!reviewChild);
+                        const stopping = act(r.id, 'stop');
+                        reviewChild!.emit('close', null);
+                        const stopped = await stopping;
+                        assert.equal(stopped.status, 'stopped');
+                        assert.equal(stopped.reviewed, false);
+                        assert.ok(calls.every(c => c.provider === provider));
+                        continue;
+                    }
+                    const completed = await waitFor(r.id, r => r.status === 'done');
+                    assert.equal(completed.reviewed, mode === 'success');
+                    if (mode === 'empty') assert.ok(completed.logs.some(l => l.includes('READMEを読む指示に戻します')));
+                    const reviewCalls = calls.filter(c => c.args.some(a => a.includes('段階：レビュー')));
+                    assert.deepEqual(reviewCalls.map(c => c.provider), [provider]);
+                    const args = reviewCalls[0].args;
+                    const protocol = provider === 'codex' ? args.at(-1)! : args[1];
+                    assert.match(protocol.split('\n')[0], /共通の開発ルール.*適用しません.*rules ファイルだけ/);
+                    assert.ok(!args.includes('--resume') && !args.includes('--continue') && !args.includes('resume'));
+                    if (provider === 'codex') {
+                        assert.equal(args[args.indexOf('--sandbox') + 1], 'read-only');
+                        assert.ok(args.includes('--ignore-user-config'));
+                    } else {
+                        assert.equal(args[args.indexOf('--tools') + 1], 'Read');
+                        assert.equal(args[args.indexOf('--permission-mode') + 1], 'dontAsk');
+                        assert.ok(!args.some(a => /^(?:Write|Edit|Bash)\(/.test(a)));
+                    }
+                    assert.ok(calls.every(c => c.provider === provider));
+                    if (mode !== 'success') {
+                        assert.equal(completed.review, '');
+                        assert.equal(completed.timings['手直し'], undefined);
+                        assert.equal(completed.reviewNote, 'レビューを実行できなかったため、レビューなしで完了しました');
+                    } else {
+                        assert.match(completed.review, /総合判定：確認済み/);
+                        assert.ok(completed.timings['手直し']);
+                    }
+                }
             }
         }
     } finally {

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { resolveWorkspace, workspace, requests, settings, history, sample } from '../server/store';
+import { resolveWorkspace, workspace, requests, settings, history, sample, requestDir, readRecord, artifacts } from '../server/store';
 
 test('作業場所は環境変数を優先し、相対パスはcwdから解決する', () => {
     const home = path.join(os.tmpdir(), 'neo-home');
@@ -39,5 +39,20 @@ test('storeはimport前に指定した一時フォルダに設定と実績を保
     } finally {
         if (previous === undefined) delete process.env.NEO_FAKE_AI;
         else process.env.NEO_FAKE_AI = previous;
+    }
+});
+
+test('旧reviewerの保存データを読み、新しいreviewedを優先してレビュー表示する', async () => {
+    for (const reviewed of [undefined, false, true]) {
+        const id = '2026-11-10-legacy-' + String(reviewed);
+        const dir = requestDir(id);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, 'review.md'), '# 旧レビュー');
+        await fs.writeFile(path.join(dir, 'state.json'), JSON.stringify({ id, input: { purpose: '報告' }, reviewer: 'claude', reviewFallback: true, reviewed }));
+        const record = await readRecord(id);
+        assert.equal(record.reviewed, reviewed ?? true);
+        assert.ok(!('reviewer' in record) && !('reviewFallback' in record));
+        await artifacts(record);
+        assert.equal(record.review, reviewed === false ? '' : '# 旧レビュー');
     }
 });

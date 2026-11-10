@@ -14,7 +14,7 @@ import type { RecordData } from '../lib/domain';
 process.env.NEO_FAKE_AI = '1';
 process.env.NEO_FAKE_DELAY_MS = '1';
 process.env.NEO_BROWSER = process.execPath;
-const input = { title: '短縮の復旧', audience: '社内', purpose: '議事録', formats: ['html'], level: '詳細', palette: '', brand: '', material: '[long] [review-both-error]', ai: { provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' } };
+const input = { title: '短縮の復旧', audience: '社内', purpose: '議事録', formats: ['html'], level: '詳細', palette: '', brand: '', material: '[long] [review-error]', ai: { provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' } };
 async function done(id: string) {
     for (let n = 0; n < 1000; n++) {
         const r = await current(id);
@@ -73,7 +73,7 @@ for (const mode of ['shorten-failure', 'shorten-abort', 'pdf-failure', 'pdf-abor
             assert.equal(completed.pdfPages, 4);
             assert.equal(completed.pdfPageNote, 'PDFは 4 枚です（目安2枚以下・多くて3枚）');
             assert.ok(completed.files.includes('minutes.pdf'));
-            assert.match(completed.reviewNote!, /手直しを省略/);
+            assert.match(completed.reviewNote!, /レビューなしで完了/);
             const dir = requestDir(id);
             if (mode !== 'success') {
                 assert.equal(completed.minutes, originalMinutes);
@@ -91,17 +91,17 @@ for (const mode of ['shorten-failure', 'shorten-abort', 'pdf-failure', 'pdf-abor
     });
 }
 
-test('両レビュー失敗の後のrevise：議事録とスライドの省略注記を引き継がない', async t => {
+test('レビュー失敗の後のrevise：議事録とスライドの省略注記を引き継がない', async t => {
     process.env.NEO_BROWSER = 'none';
     try {
         for (const purpose of ['議事録', '提案']) {
-            const created = await create({ ...input, purpose, level: purpose === '提案' ? '詳細' : input.level, palette: '026', material: '[review-both-error]' }, []);
+            const created = await create({ ...input, purpose, level: purpose === '提案' ? '詳細' : input.level, palette: '026', material: '[review-error]' }, []);
             if (purpose === '提案') {
                 for (let n = 0; n < 1000 && (await current(created.id)).status !== 'design'; n++) await delay(5);
                 await act(created.id, 'approve');
             }
             const first = await done(created.id);
-            assert.match(first.reviewNote!, /手直しを省略/);
+            assert.match(first.reviewNote!, /レビューなしで完了/);
             await act(created.id, 'revise', { feedback: '見出しを短く' });
             const revised = await done(created.id);
             assert.equal(revised.reviewNote, undefined);

@@ -46,6 +46,7 @@ test('議事録protocol：本番・手直し・短縮は字数と保持事項、
     const r = { input } as RecordData;
     for (const stage of ['本番', '手直し'] as const) {
         const text = minutesProtocol(r, stage, '/request', '/prompts');
+        assert.match(text.split('\n')[0], /共通の開発ルール.*適用しません.*rules ファイルだけ/);
         assert.match(text, /約1,600〜1,800字（A4 2枚以下）/);
         assert.match(text, /決定事項・宿題・未確認事項は削らない/);
     }
@@ -118,32 +119,33 @@ test('PDF不可時は枚数・古い注記を消して短縮せず保存する',
         assert.equal(noPDF.pdfPages, undefined);
     } finally { process.env.NEO_BROWSER = process.execPath; }
 });
-test('議事録・スライド：Codex実行失敗でClaudeレビュー／両方失敗なら手直しせず完了', async () => {
+test('議事録・スライド：同じAIで1回レビューし、失敗なら手直しせず完了', async () => {
     for (const purpose of ['議事録', '報告'] as const) {
-        const fallback = await done(await start(purpose, '[review-error]'));
-        assert.equal(fallback.reviewFallback, true);
-        assert.equal(fallback.reviewer, 'claude');
-        assert.match(fallback.review, /Codexレビュー未実施（Claude Codeで代替）/);
-        assert.ok(fallback.timings['手直し']);
-        const skipped = await done(await start(purpose, '[review-both-error]'));
+        const reviewed = await done(await start(purpose, ''));
+        assert.equal(reviewed.reviewed, true);
+        assert.match(reviewed.review, /Claude Codeレビュー/);
+        assert.ok(reviewed.timings['手直し']);
+        const skipped = await done(await start(purpose, '[review-error]'));
         assert.equal(skipped.error, undefined);
-        assert.equal(skipped.reviewer, undefined);
-        assert.equal(skipped.reviewFallback, true);
+        assert.equal(skipped.reviewed, false);
         assert.equal(skipped.review, '');
-        assert.match(skipped.reviewNote!, /レビューなしで手直しを省略/);
+        assert.equal(skipped.reviewNote, 'レビューを実行できなかったため、レビューなしで完了しました');
         assert.equal(skipped.timings['手直し'], undefined);
         assert.ok(!skipped.files.includes('review.md') && !skipped.files.includes('revision.md'));
+        assert.equal(skipped.logs.filter(l => l.includes('レビューを開始します')).length, 1);
         assert.ok(skipped.logs.some(l => l.includes(skipped.reviewNote!)));
     }
 });
-test('Codexレビュー中にユーザーが中断したらClaudeへ切り替えない', async () => {
+
+test('レビュー中の中断はレビュー失敗扱いにせず停止する', async () => {
     process.env.NEO_FAKE_DELAY_MS = '180';
     try {
         const id = await start('議事録', '[review-error]');
-        await waitFor(id, r => r.stage === 'レビュー' && r.reviewer === 'codex');
+        await waitFor(id, r => r.stage === 'レビュー');
         const stopped = await act(id, 'stop');
         assert.equal(stopped.status, 'stopped');
-        assert.equal(stopped.reviewFallback, false);
-        assert.ok(!stopped.logs.some(l => l.includes('Claude Codeで代替')));
+        assert.equal(stopped.reviewed, false);
+        assert.equal(stopped.reviewNote, undefined);
+        assert.ok(!stopped.logs.some(l => l.includes('レビュー失敗')));
     } finally { process.env.NEO_FAKE_DELAY_MS = '40'; }
 });

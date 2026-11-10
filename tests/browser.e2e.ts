@@ -117,12 +117,18 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await fs.writeFile(path.join(shots, 'design-1280.png'), Buffer.from(designShot.data, 'base64'));
         // Observe the first done DOM commit, so an effect cannot hide a missing initial preview.
         await evaluate("new MutationObserver((_,observer)=>{if(!document.querySelector('.result-top'))return;if(!document.querySelector('iframe[title=成果物プレビュー]'))document.documentElement.dataset.previewMissing='true';else observer.disconnect();}).observe(document.querySelector('.right-column'),{childList:true,subtree:true})");
+        await click('止める');
+        await wait("document.querySelector('.recovery')");
+        assert.ok(await evaluate("document.querySelector('.recovery').textContent.includes('上限が解けたら『再開』で、止まった段から続けます')"));
+        assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent==='もう一方のAIで続ける')"), false);
+        await click('再開');
+        await wait("document.querySelector('.design-drawer')");
         await click('OKで本番へ');
         await wait("document.querySelector('.result-top')?.textContent.includes('できあがりました')");
         assert.ok(await evaluate("document.querySelector('iframe[title=成果物プレビュー]')?.getAttribute('sandbox')==='allow-scripts'"));
         assert.equal(await evaluate("document.documentElement.dataset.previewMissing || ''"), '', '完了の初回描画からsandbox付きプレビューがある');
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codex')"));
+        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'done-1280.png'), Buffer.from(resultShot.data, 'base64'));
         await click('履歴');
@@ -161,7 +167,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate("window.__minutesWaits"), 0);
         await evaluate("window.__minutesObserver.disconnect()");
         assert.equal(await evaluate("!!document.querySelector('.design-drawer,.edge-tab')"), false);
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codex')"));
+        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
         await evaluate("document.querySelector('.minutes-ledger summary').click()");
         assert.ok(await evaluate("document.querySelector('.minutes-ledger pre').textContent.includes('台帳')"));
         assert.ok(await evaluate("document.querySelector('.minutes-document table')?.textContent.includes('担当')"));
@@ -231,14 +237,14 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('window.__shorteningObserved'), true);
         assert.equal(await evaluate("(()=>{const r=document.querySelector('.pdf-page-note').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight && r.right<=innerWidth})()"), true, '枚数はスクロールせず読める');
         await evaluate('window.__lengthObserver.disconnect()');
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codexレビュー未実施') && document.querySelector('.results-text').textContent.includes('Claude Codeで代替')"));
+        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('レビューを実行できなかったため、レビューなしで完了しました') && !document.querySelector('.results-text').textContent.includes('Codexレビュー未実施')"));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         const lengthShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile(path.join(shots, 'minutes-long-fallback-1280.png'), Buffer.from(lengthShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'minutes-long-review-error-1280.png'), Buffer.from(lengthShot.data, 'base64'));
         await click('新しく作る');
-        await material('週次会議 [review-both-error]');
+        await material('週次会議 [review-error]');
         await click('作成する');
-        await wait("document.querySelector('.result-top') && document.querySelector('.results-text').textContent.includes('レビューなしで手直しを省略')");
+        await wait("document.querySelector('.result-top') && document.querySelector('.results-text').textContent.includes('レビューを実行できなかったため、レビューなしで完了しました')");
         assert.equal(await evaluate("!!document.querySelector('.recovery')"), false);
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         await click('新しく作る');

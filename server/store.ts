@@ -113,6 +113,11 @@ export async function readRecord(id: string) {
     const r = await jsonRead<RecordData | null>(file, null);
     if (!r)
         throw Error('依頼が見つかりません');
+    // 古い保存データは、新しい reviewed が未設定の時だけ引き継ぐ。
+    const legacy = r as RecordData & { reviewer?: string; reviewFallback?: boolean };
+    if (r.reviewed === undefined && legacy.reviewer) r.reviewed = true;
+    delete legacy.reviewer;
+    delete legacy.reviewFallback;
     // Legacy 会議まとめ records retain their original label and slide artifacts for history display.
     return r;
 }
@@ -167,7 +172,7 @@ export async function artifacts(r: RecordData) {
     if (isMinutes(r.input)) r.minutes = (await fs.readFile(path.join(base, 'minutes.md'), 'utf8').catch(() => '')).replace(/^\uFEFF/, '');
     for (const key of ['design', 'check', 'review'] as const) {
         // レビュー段階を通っていない（簡易版など）のに作るAIが review.md を書いた場合は、レビュー結果として扱わない
-        if (key === 'review' && !r.reviewer) {
+        if (key === 'review' && !r.reviewed) {
             r.review = '';
             continue;
         }

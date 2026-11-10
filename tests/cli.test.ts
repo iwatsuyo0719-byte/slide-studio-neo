@@ -1,7 +1,8 @@
 import './workspace';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execute, sandboxFailed } from '../server/cli';
+import { execute, sandboxFailed, cliArgs } from '../server/cli';
+import { defaults } from '../lib/domain';
 test('サンドボックスの起動失敗をレビュー失敗として見分ける', () => {
     assert.equal(sandboxFailed('exited -1 in 0ms:\nFailed to create unified exec process: CreateProcessWithLogonW failed: 1909'), true);
     assert.equal(sandboxFailed('runner failed during SpawnChild: CreateProcessAsUserW failed: 5'), true);
@@ -29,3 +30,13 @@ test('既に中断済みならCLIを起動しない', async () => {
     assert.equal(started, false);
 });
 test('中断時はWindowsのtree終了が拒否されても自分の子プロセスを止める', async () => { const controller = new AbortController(); let child: import('node:child_process').ChildProcess | undefined; await assert.rejects(() => execute({ bin: process.execPath, prefix: [] }, ['-e', 'setInterval(()=>{},1000)'], process.cwd(), undefined, c => { child = c; setTimeout(() => controller.abort(), 40); }, controller.signal, 15000), /中断しました/); assert.ok(child?.exitCode !== null || child?.signalCode !== null); });
+
+test('Codexは生成・レビューとも利用者の設定を無視し、新しく起動する', () => {
+    for (const readOnly of [false, true]) {
+        const args = cliArgs({ provider: 'codex', model: 'gpt-6.1-sol', depth: 'auto' }, '詳細', defaults, 'C:/request', '指示', readOnly);
+        assert.equal(args[0], 'exec');
+        assert.ok(args.includes('--ignore-user-config'));
+        assert.equal(args[args.indexOf('--sandbox') + 1], readOnly ? 'read-only' : 'workspace-write');
+        assert.ok(!args.includes('resume'));
+    }
+});

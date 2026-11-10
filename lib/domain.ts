@@ -68,8 +68,7 @@ export interface RecordData {
     answer?: string;
     revisionUsed: boolean;
     error?: string;
-    reviewer?: Provider;
-    reviewFallback?: boolean;
+    reviewed?: boolean;
     paletteCandidates?: string[];
     chosenPalette?: string;
     resumeStage?: Stage;

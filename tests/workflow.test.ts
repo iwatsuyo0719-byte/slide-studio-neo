@@ -53,7 +53,7 @@ test('偽AIの全段階・履歴・配信範囲・中断再開を通す', async 
     await act(design.id, 'approve', { palette: '001' });
     const complete = await waitFor(design.id, 'done');
     assert.equal(complete.chosenPalette, '001');
-    assert.match(complete.review, /Codex/);
+    assert.match(complete.review, /Claude Code/);
     assert.ok(complete.files.includes('slides.pptx'));
     assert.ok(complete.timings['手直し'] !== undefined);
     await act(complete.id, 'revise', { feedback: '見出しを短く' });
@@ -83,9 +83,14 @@ test('偽AIの全段階・履歴・配信範囲・中断再開を通す', async 
     const err = await create({ ...input, material: '[error] 架空素材' }, []);
     const failed = await waitFor(err.id, 'error');
     assert.ok(failed.design);
-    await act(err.id, 'switch');
+    assert.doesNotMatch(failed.error!, /もう一方/);
+    await assert.rejects(act(err.id, 'switch'), /操作が不正/);
+    const retry = await readRecord(err.id);
+    retry.attempt = 1; // 偽AIの一時的な生成失敗を解除する。
+    await save(retry);
+    await act(err.id, 'resume');
     const resumed = await waitFor(err.id, 'done');
-    assert.equal(resumed.input.ai.provider, 'codex');
+    assert.equal(resumed.input.ai.provider, input.ai.provider);
     assert.equal(resumed.attempt, 1);
     process.env.NEO_FAKE_DELAY_MS = '100';
     const stop = await create(input, []);
@@ -117,7 +122,7 @@ test('議事録：全レベルで止まらず詳細・レビュー・手直し�
             assert.equal(done.asked, false);
             assert.equal(done.reason, '');
             assert.equal(done.paletteCandidates, undefined);
-            assert.equal(done.reviewer, 'codex');
+            assert.equal(done.reviewed, true);
             assert.match(done.review, /経緯の飛躍/);
             assert.ok(done.timings['レビュー'] !== undefined && done.timings['手直し'] !== undefined);
             assert.match(done.pdfNote!, /PDFは作れませんでした（Chrome か Edge が必要）/);
@@ -178,7 +183,7 @@ test('議事録：全レベルで止まらず詳細・レビュー・手直し�
         await assert.rejects(() => act(old.id, 'save-minutes', { minutes: '旧台帳待ちには保存不可' }), /完了した議事録/);
         await act(old.id, 'approve');
         const complete = await waitFor(old.id, 'done');
-        assert.equal(complete.reviewer, 'codex');
+        assert.equal(complete.reviewed, true);
         const legacy = { ...complete, input: { ...complete.input, purpose: '会議まとめ' } } as unknown as RecordData;
         await save(legacy);
         assert.equal((await readRecord(legacy.id)).input.purpose, '会議まとめ');
