@@ -112,3 +112,4 @@
 - このPCで doctor は全項目合格（Claude Code・Codexともログイン済み）。opus＝Opus 5.5、fable＝Fable 5.1 が使われることを確認
 - 次：自宅PCで clone → npm install → npm run doctor → npm run app を試す
 - 配布する前に要ること（未着手）：配色100選の出典（画像「AI配色の名前100選」）の利用条件の確認か独自配色への差し替え、macOSでの確認、初めての人向けの説明、バージョンを付けた配布
+- 2026-11-10（自宅PC）：pull → npm install → build → 起動まで確認（画面表示OK）。doctorはPython不足で止まったが、原因はPython 3.12＋python-pptx 1.0.2が入っているのにPATH未登録だったこと（`%LOCALAPPDATA%\Python\bin` をユーザーPATHの先頭に追加。ユーザー許可）。追加後 doctor 全必須項目合格。PowerPoint・LibreOfficeは無し（pptx画像化は未判定になる）。実生成は未確認
