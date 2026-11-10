@@ -114,7 +114,8 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, shorten = fals
         r.tokens = r.tokens || {};
         r.tokens[stage] = (r.tokens[stage] || 0) + Number(used[1].replace(/,/g, ''));
     }
-    if (sandboxError) throw Error('CLIのサンドボックスが起動できませんでした');
+    // サンドボックスの失敗は、読み取り専用のレビュー（出力が信用できない）か、必要なファイルが無い時だけエラーにする
+    if (sandboxError && readOnlyReview) throw Error('CLIのサンドボックスが起動できませんでした');
     if (readOnlyReview) {
         if (!clean(output).trim()) throw Error('レビューの出力が得られませんでした');
         await fs.writeFile(path.join(dir, 'review.md'), clean(output));
@@ -122,11 +123,16 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, shorten = fals
     const required: Partial<Record<Stage, string[]>> = { 作る: ['ledger.md', 'minutes.md', 'check.md'], 設計図: isMinutes(r.input) ? ['ledger.md'] : ['design.md', 'decision.json'], 本番: isMinutes(r.input) ? ['minutes.md'] : r.input.formats.map(f => f === 'html' ? 'index.html' : 'slides.pptx'), 検査: ['check.md'], レビュー: isMinutes(r.input) ? ['minutes.md', 'review.md', 'revision.md', 'check.md'] : ['review.md'], 手直し: isMinutes(r.input) ? ['revision.md', 'minutes.md'] : ['revision.md'] };
     if (!isMinutes(r.input) && stage === '設計図' && await fs.stat(path.join(dir, 'question.json')).then(st => st.mtimeMs >= since).catch(() => false))
         return;
-    if (isMinutes(r.input) && stage === '作る' && !shorten) {
-        // 再開時は完成済みの台帳・本文を再利用できる。今回の自己確認は必須。
-        await requireFresh(dir, ['ledger.md', 'minutes.md'], 0);
-        await requireFresh(dir, ['check.md'], since);
-    } else await requireFresh(dir, shorten ? ['minutes.md', 'check.md', 'revision.md'] : required[stage] || [], since);
+    try {
+        if (isMinutes(r.input) && stage === '作る' && !shorten) {
+            // 再開時は完成済みの台帳・本文を再利用できる。今回の自己確認は必須。
+            await requireFresh(dir, ['ledger.md', 'minutes.md'], 0);
+            await requireFresh(dir, ['check.md'], since);
+        } else await requireFresh(dir, shorten ? ['minutes.md', 'check.md', 'revision.md'] : required[stage] || [], since);
+    } catch (error) {
+        if (sandboxError) throw Error('CLIのサンドボックスが起動できませんでした');
+        throw error;
+    }
 }
 async function phaseSample(r: RecordData) { await sample({ key: historyKey(r.input, r.selectedLevel || r.input.level, await settings()), phase: r.phase, ms: r.activeMs + Date.now() - r.phaseStart }); }
 async function runReview(r: RecordData, job: Job): Promise<boolean> {
@@ -135,6 +141,9 @@ async function runReview(r: RecordData, job: Job): Promise<boolean> {
     r.review = '';
     const provider = r.input.ai.provider;
     await fs.rm(path.join(requestDir(r.id), 'review.md'), { force: true });
+    // 議事録のレビュー役は minutes.md を直接直すので、失敗した時に途中の書きかけを残さないよう元を控える
+    const minutesFile = path.join(requestDir(r.id), 'minutes.md');
+    const before = isMinutes(r.input) ? await fs.readFile(minutesFile, 'utf8').catch(() => null) : null;
     try {
         job.controller.signal.throwIfAborted();
         await log(r, provider + ' レビューを開始します');
@@ -147,7 +156,8 @@ async function runReview(r: RecordData, job: Job): Promise<boolean> {
         return true;
     } catch (error) {
         if (job.controller.signal.aborted) throw error;
-        if (isMinutes(r.input)) throw error;
+        // 議事録（社外）のレビューは成果物の一部なので、書きかけを元に戻してから止め、利用上限が解けた後に「レビュー」の段から再開できるようにする
+        if (before !== null) { await atomicText(minutesFile, before); throw error; }
         await log(r, provider + ' レビュー失敗：' + String(error));
     }
     await fs.rm(path.join(requestDir(r.id), 'review.md'), { force: true });
@@ -166,7 +176,7 @@ async function run(r: RecordData, stage: Stage, job: Job, shorten = false) {
     else if (fake()) await fakeStage(r, requestDir(r.id), stage, job.controller.signal, shorten);
     else await actualStage(r, stage, job, shorten);
     job.controller.signal.throwIfAborted();
-    if (!shorten) r.timings[r.stage] = Date.now() - r.stageStart;
+    if (!shorten) r.timings[stage === '手直し' ? '手直し' : r.stage] = Date.now() - r.stageStart;
     await artifacts(r);
     await save(r);
     return reviewed;
@@ -233,7 +243,8 @@ function launch(r: RecordData, start: Stage) {
     void (async () => {
         let shorteningRestored = false;
         try {
-            if (isMinutes(r.input) && start === '作る') {
+            // 完了後の直し（revisionUsed）の再開では、前のレビュー結果を消さない
+            if (isMinutes(r.input) && start === '作る' && !r.revisionUsed) {
                 r.reviewed = false; r.review = ''; r.reviewNote = undefined;
             }
             if (!isMinutes(r.input) && (start === '設計図' || start === '保存')) {
@@ -434,6 +445,7 @@ export async function act(id: string, action: string, data: Record<string, unkno
             // 保存先はこの依頼の正本だけ。外部へのリンクも拒否する。
             const file = await safeFile(id, ['minutes.md']);
             await atomicText(file, data.minutes);
+            await minutesAutoCheck(r);
             await minutesPDF(r);
             await artifacts(r);
             await save(r);
