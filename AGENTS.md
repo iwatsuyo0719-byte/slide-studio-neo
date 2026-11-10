@@ -6,7 +6,7 @@
 
 `slide-studio` Skill（正本：`C:\Dev\AI_Workspace\01_Projects\Active\slide-studio`）の段取りを、選択式のUIから使えるツールにする。
 
-- 2026-11-08 立ち上げ。**要件定義はまだ。** 決まったことは [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) と [DECISIONS.md](DECISIONS.md) に書く
+- 2026-11-08 立ち上げ、要件定義 v1.0 承認済み。v1（スライド・議事録）実装済みで、いまは生成コストの改良中。仕様は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)、決定は [DECISIONS.md](DECISIONS.md) に書く
 - 現在地は [STATUS.md](STATUS.md)
 - ユーザーからの初期要望は [docs/INITIAL_REQUEST.md](docs/INITIAL_REQUEST.md)
 

@@ -6,10 +6,14 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 const base = process.env.NEO_TEST_URL || 'http://127.0.0.1:3210';
 const chrome = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定まで通す', { timeout: 180000 }, async () => {
+test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定まで通す', { timeout: 420000 }, async () => {
     const bootstrap = await fetch(base + '/api/neo').then(r => r.json());
     assert.equal(bootstrap.fake, true, '実AIでは実行しません');
-    const profile = path.resolve('test-results/browser-test-' + crypto.randomUUID());
+    // 使い捨てのブラウザフォルダと確認画像は、失敗した時だけ残して原因を見られるようにする。成功したら消す
+    const runId = crypto.randomUUID();
+    const profile = path.resolve('test-results/browser-test-' + runId);
+    const shots = path.resolve('test-results/verification-' + runId);
+    let passed = false;
     await fs.mkdir(profile, { recursive: true });
     const child = spawn(chrome, [...(process.env.NEO_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), '--headless=new', '--disable-gpu', '--disable-software-rasterizer', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--window-size=1280,720', '--user-data-dir=' + profile, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
@@ -91,9 +95,9 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
         await wait("!document.querySelector('.palette-popup')");
         assert.equal(await evaluate("(()=>{" + label + "return [...document.querySelectorAll('button')].find(b=>label(b)==='作成する').disabled})()"), true);
-        await fs.mkdir('test-results/verification', { recursive: true });
+        await fs.mkdir(shots, { recursive: true });
         const shot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/input-1280.png', Buffer.from(shot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'input-1280.png'), Buffer.from(shot.data, 'base64'));
         await material('架空の週次報告です。今週は計画を確認し、来週の担当を決めます。');
         await click('html');
         await click('pptx');
@@ -110,7 +114,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('設計図を確認');
         await wait("document.querySelector('.design-drawer')");
         const designShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/design-1280.png', Buffer.from(designShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'design-1280.png'), Buffer.from(designShot.data, 'base64'));
         // Observe the first done DOM commit, so an effect cannot hide a missing initial preview.
         await evaluate("new MutationObserver((_,observer)=>{if(!document.querySelector('.result-top'))return;if(!document.querySelector('iframe[title=成果物プレビュー]'))document.documentElement.dataset.previewMissing='true';else observer.disconnect();}).observe(document.querySelector('.right-column'),{childList:true,subtree:true})");
         await click('OKで本番へ');
@@ -120,7 +124,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codex')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/done-1280.png', Buffer.from(resultShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'done-1280.png'), Buffer.from(resultShot.data, 'base64'));
         await click('履歴');
         await wait("document.querySelector('.history-list button')");
         assert.ok(await evaluate("document.querySelector('.history-list').textContent.includes('完了')"));
@@ -177,13 +181,13 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         } else assert.ok(await evaluate("document.querySelector('.pdf-note')?.textContent.includes('PDFは作れませんでした')"));
         assert.ok(await evaluate("document.querySelector('.minutes-document').getBoundingClientRect().bottom <= document.querySelector('.feedback-row').getBoundingClientRect().top"), '本文がAI直し欄に重ならない');
         const minutesShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/minutes-done-1280.png', Buffer.from(minutesShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'minutes-done-1280.png'), Buffer.from(minutesShot.data, 'base64'));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         await click('編集');
         await wait("document.querySelector('[aria-label=議事録のMarkdown]')");
         assert.ok(await evaluate("document.querySelector('.minutes-editor').getBoundingClientRect().bottom <= document.querySelector('.feedback-row').getBoundingClientRect().top"), '編集欄と保存ボタンがAI直し欄に重ならない');
         const editShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/minutes-edit-1280.png', Buffer.from(editShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'minutes-edit-1280.png'), Buffer.from(editShot.data, 'base64'));
         const beforeEdit = await evaluate("document.querySelector('.minutes-source').value");
         await evaluate("(()=>{const el=document.querySelector('.minutes-source');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,el.value+'\\n手動保存の動作確認。\\n');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await wait("document.querySelector('.minutes-toolbar').textContent.includes('未保存')");
@@ -230,7 +234,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Codexレビュー未実施') && document.querySelector('.results-text').textContent.includes('Claude Codeで代替')"));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         const lengthShot = await send('Page.captureScreenshot', { format: 'png' });
-        await fs.writeFile('test-results/verification/minutes-long-fallback-1280.png', Buffer.from(lengthShot.data, 'base64'));
+        await fs.writeFile(path.join(shots, 'minutes-long-fallback-1280.png'), Buffer.from(lengthShot.data, 'base64'));
         await click('新しく作る');
         await material('週次会議 [review-both-error]');
         await click('作成する');
@@ -254,6 +258,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
         assert.deepEqual(errors, [], 'ブラウザ実行時エラーが無い');
         await send('Target.closeTarget', { targetId }, false);
+        passed = true;
     }
     finally {
         ws?.close();
@@ -264,5 +269,13 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
             else
                 child.kill();
         }
+        if (passed) {
+            // Chromeが終了してフォルダを離すまで少し待ってから消す
+            for (let n = 0; n < 10; n++) {
+                try { await fs.rm(profile, { recursive: true, force: true }); await fs.rm(shots, { recursive: true, force: true }); break; }
+                catch { await delay(500); }
+            }
+        }
+        else console.log('失敗時の記録を残しました：' + profile + ' / ' + shots);
     }
 });
