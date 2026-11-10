@@ -107,6 +107,12 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, reviewer?: Pro
         }
     }, child => { job.child = child; }, job.controller.signal, 0, review);
     await log(r, buffer || output);
+    // 実測の記録：Codexは最後に「tokens used」とトークン数を出す。段階ごとに合計して残す
+    const used = [...(buffer + '\n' + output).matchAll(/tokens used\s*:?\s*([\d,]+)/gi)].pop();
+    if (used) {
+        r.tokens = r.tokens || {};
+        r.tokens[stage] = (r.tokens[stage] || 0) + Number(used[1].replace(/,/g, ''));
+    }
     if (review) {
         if (!clean(output).trim()) throw Error('レビューの出力が得られませんでした');
         // Codex のサンドボックスが起動できずファイルを読めなかった応答は、正常終了でもレビュー失敗として代替へ回す。

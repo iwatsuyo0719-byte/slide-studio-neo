@@ -76,6 +76,8 @@ export interface RecordData {
     pausedStatus?: 'design' | 'question';
     attempt: number;
     timings: Partial<Record<Stage, number>>;
+    // 段階ごとのトークン数（CLIが出力した場合だけ。Codexの「tokens used」を記録する）
+    tokens?: Partial<Record<Stage, number>>;
 }
 export interface HistorySample {
     key: string;
