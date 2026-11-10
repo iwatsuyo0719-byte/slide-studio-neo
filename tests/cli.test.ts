@@ -41,3 +41,25 @@ test('Codexは生成・レビューとも利用者の設定を無視し、新し
         assert.ok(!args.includes('resume'));
     }
 });
+test('Windows：.cmd が実行ファイル（.exe）を呼ぶ形でも見つけ、拡張子なしのsh用スクリプトは使わない', { skip: process.platform !== 'win32' }, async () => {
+    const { locate } = await import('../server/cli');
+    const fs = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-locate-'));
+    const previous = process.env.PATH;
+    try {
+        await fs.mkdir(path.join(dir, 'node_modules', 'tool', 'bin'), { recursive: true });
+        await fs.writeFile(path.join(dir, 'node_modules', 'tool', 'bin', 'neotool.exe'), '');
+        await fs.writeFile(path.join(dir, 'neotool.cmd'), '@ECHO off\r\n"%dp0%\\node_modules\\tool\\bin\\neotool.exe"   %*\r\n');
+        await fs.writeFile(path.join(dir, 'neotool'), '#!/bin/sh\n');
+        process.env.PATH = dir;
+        const found = await locate('neotool');
+        assert.equal(found?.bin, path.join(dir, 'node_modules', 'tool', 'bin', 'neotool.exe'));
+        await fs.rm(path.join(dir, 'neotool.cmd'));
+        assert.equal(await locate('neotool'), null);
+    } finally {
+        process.env.PATH = previous;
+        await fs.rm(dir, { recursive: true, force: true });
+    }
+});

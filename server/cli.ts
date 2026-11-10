@@ -13,7 +13,8 @@ export interface CLIStatus {
 }
 export async function locate(name: string): Promise<Command | null> {
     for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-        for (const ext of process.platform === 'win32' ? ['.exe', '.cmd', ''] : ['']) {
+        // Windows では拡張子なしのファイル（npm が作る sh 用の起動スクリプト）は直接起動できないので見ない
+        for (const ext of process.platform === 'win32' ? ['.exe', '.cmd'] : ['']) {
             const file = path.join(dir, name + ext);
             if (!await fs.stat(file).then(s => s.isFile()).catch(() => false))
                 continue;
@@ -24,6 +25,13 @@ export async function locate(name: string): Promise<Command | null> {
                     const script = path.resolve(dir, hit[1]);
                     if (await fs.stat(script).catch(() => null))
                         return { bin: process.execPath, prefix: [script] };
+                }
+                // 新しい Claude Code などは .cmd から実行ファイル（.exe）を呼ぶ
+                const exe = text.match(/"%~?dp0%?\\([^"\r\n]+\.exe)"/i);
+                if (exe) {
+                    const bin = path.resolve(dir, exe[1]);
+                    if (await fs.stat(bin).catch(() => null))
+                        return { bin, prefix: [] };
                 }
                 continue;
             }

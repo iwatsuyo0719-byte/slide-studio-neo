@@ -104,3 +104,11 @@
 - スライドの高速化はここで一区切り。P3（詳細版のレビューと手直しを1回の起動にまとめる）は、本物の生成で目標（詳細版30分・簡易版15分）を実際に超えた時だけ検討する
 - 詳細版の測定はしない。CEOの見積もり（実測ではない）：詳細版 約25〜29分、簡易版 約16〜17分
 - 測定はユーザーの許可制
+
+### 別のPCで使えるようにする（2026-11-10）
+
+- 確認コマンド `npm run doctor`（Node.js・CLIとサブスクのログイン・Python＋python-pptx・Chrome/Edge・PowerPoint/LibreOffice・作業場所）を追加。READMEを「別のPCで使うまで」から書き直した（Codex実装・Claude確認）
+- 直した不具合：新しい Claude Code（.cmd が claude.exe を呼ぶ形）をNEOが起動できず「ログイン確認に失敗」になっていた。.cmd から .exe をたどり、拡張子なしのsh用スクリプトは使わないようにした
+- このPCで doctor は全項目合格（Claude Code・Codexともログイン済み）。opus＝Opus 5.5、fable＝Fable 5.1 が使われることを確認
+- 次：自宅PCで clone → npm install → npm run doctor → npm run app を試す
+- 配布する前に要ること（未着手）：配色100選の出典（画像「AI配色の名前100選」）の利用条件の確認か独自配色への差し替え、macOSでの確認、初めての人向けの説明、バージョンを付けた配布

@@ -1,102 +1,149 @@
 # SLIDE STUDIO NEO
 
-素材を貼り付け、読み手・出力・目的・レベル・配色を選んで、ローカルの Claude Code / Codex CLI からスライドや議事録を作る Web アプリです。TOP の同じページ内で入力・生成中・質問・設計図確認・完了を切り替えます。
+素材を貼り付け、読み手・目的・出力形式を選ぶと、PC上のClaude Code / Codex CLIでスライドや議事録を作るローカルWebアプリです。
 
-## 必要なもの・起動
+## 別のPCで使うまで
 
-- Node.js 20.9 以上（検証環境は Windows / Node.js 24.22.1）と npm。
-- Claude Code または Codex CLI。PATH に通し、**サブスクでログイン**してください。APIキーの入力欄はありません。CLI の存在・サブスク認証状態は設定の「CLIを再確認」で更新できます。
-- 正本の制作規則はこのrepoの prompts/ です。姉妹repoのインストール・書き換えは不要です。
-- pptx の実制作には、CLI が使える Python と python-pptx が必要です。画像プレビューは任意の LibreOffice、全ページの画像化には追加で Poppler の pdftoppm を PATH に置いてください。LibreOffice だけなら先頭ページを画像化します。どちらも無い場合も pptx をダウンロードできます。
+### 必要な物
 
-repo のルートで実行します。
+| 必要な物 | 条件・用途 |
+|---|---|
+| Git | repoをcloneするために必要 |
+| Node.js・npm | Node.js 20.9以上。LTS版を推奨 |
+| Claude Code または Codex CLI | どちらか1つ以上。Claude Codeはclaude.aiのサブスク、CodexはChatGPTでログイン。APIキー認証は使いません |
+| Python・python-pptx | pptx作成と構造の機械検査に必要。`python` または `python3` をPATHに追加 |
+| Chrome または Edge | 議事録のPDF作成・スライドの機械検査に必要 |
+| PowerPoint（Windows、任意） | pptxの全ページ画像化。利用者がPowerPointを開いている間は画像化しません |
+| LibreOffice（任意） | PowerPointがない場合のプレビュー用。`soffice` をPATHに追加。全ページ画像には任意でPopplerの `pdftoppm` も必要 |
 
-~~~powershell
-npm install
-npm run dev
-~~~
+1. Git・Node.js・必要なCLIをインストールします。Claude Codeは公式の導入手順でインストールし、`claude auth login` でサブスクにログインします。Codex CLIは次の手順です。
 
-起動後に http://127.0.0.1:3000 をブラウザで開きます。インストール後の起動は npm run dev の1コマンドです。外部公開は想定しておらず、サーバーはループバックアドレスにだけバインドします。
+   ```powershell
+   npm install -g @openai/codex
+   codex login
+   ```
 
-本番ビルドを使う場合:
+   Python導入後、利用するPythonに `pip install python-pptx`（または `python -m pip install python-pptx`）を実行します。CLIがPATHで見つからない場合はターミナルを開き直してください。
 
-~~~powershell
-npm run build
-npm start
-~~~
+2. repoを取得し、依存をインストールします。
 
-## 偽AIで動作確認
+   ```powershell
+   git clone https://github.com/iwatsuyo0719-byte/slide-studio-neo.git
+   cd slide-studio-neo
+   npm install
+   ```
 
-実CLIの生成は呼び出しません。実AIでの生成検証とは区別してください。
+3. 環境を確認します。
 
-~~~powershell
-$env:NEO_FAKE_AI = "1"
-npm run dev
-~~~
+   ```powershell
+   npm run doctor
+   ```
 
-素材に [question] を含めると質問、[error] を含めると本番の段階でエラーになります。「もう一方のAIで続ける」で保存済みの段階から進みます。AUTO は偽AIでは社外または素材600文字超を詳細、それ以外を簡易にする固定の判定です。実運用では作るAIが判断し、選んだ版と理由を返します。既定の段階待機は1秒、NEO_FAKE_DELAY_MS で変更できます。偽AIのpptx・検査・レビューは動作確認用で、資料品質の検証結果ではありません。
+   各項目を「合格／不足／任意」で表示します。AIは片方が使えれば必須条件を満たします。必須項目が足りなければ終了コード1、そろっていれば0です。「不足」の対処を実行して再確認してください。doctorはCLIのヘルプとログイン状態だけを確認し、AIへの問い合わせや生成をしません。利用上限や実際の生成成功までは確認しません。
 
-偽AIの素材に `[long]` を入れると長い議事録を作り、PDFが作成できた場合は4枚として短縮経路を再現します。`[shorten-ok]` も入れると経緯を短くし、作り直したPDFの実枚数を使います。`[review-error]` でCodexレビュー失敗→Claude Codeへ切り替え、`[review-both-error]` で両レビュー失敗→手直しを省略して完了する経路を再現できます（議事録・詳細スライド共通）。
+   `node_modules` がないとdoctorを動かすtsx自体もないため、必ず先に `npm install` を実行してください。
 
-目的は「提案・報告・説明・研修・議事録」の順です（説明・研修は1つの選択肢）。議事録は出力形式が「Markdown＋PDF（固定）」、レベルが「詳細・止まらず完成まで（固定）」になり、配色は使いません。台帳→議事録→自己検査→新しく起動したCodexのread-onlyレビュー→1周の手直し→PDFまで自動で進みます。目安は約15〜25分（仮）です。台帳は完了画面の「台帳を読む」から確認できます。PDFにはPCのChromeかEdgeを使います。見つからない時はMarkdownだけで完了し、画面に案内を出します。NEO_BROWSER にブラウザ実行ファイルのパスを指定でき、NEO_BROWSER=none でPDFなしの動作を確認できます。
+4. 本番用に起動します。以降のコマンドもrepoのルートで実行してください。
 
-議事録の本文は1時間の会議で基本は約1,600〜1,800字（A4 2枚以下）、内容が多い時だけ約2,500字（3枚）までを目安に指示します。生成の最後にPDFを数え、3枚を超えたら最新の minutes.md の論点と経緯を1回だけ短縮します。決定事項・宿題・未確認事項は削らない指示です。短縮後も3枚を超える場合は止めず、画面とログに枚数を表示します。完了後の手動保存・AI修正では枚数の更新だけを行い、自動短縮しません。PDFを作れない場合は枚数確認を省略します。
+   ```powershell
+   npm run build
+   npm start
+   ```
 
-完了画面の「表示／編集」で議事録のMarkdownを直接編集できます。「保存してPDFを作り直す」で正本を保存し、PDFを再作成します。PDFを作れない場合もMarkdownを保存して理由を表示し、古いPDFは配布しません。保存は50万文字までで、生成中や他の処理中には行えません。AIへの直し指示（1周）も使え、手動保存とAIの直しはどちらを先にしても最新の保存済み minutes.md を元にします。旧版の台帳確認待ちは「OKで本番へ」で続けられます。
+   まとめて実行する場合は `npm run app`（build成功後にstart）を使えます。起動中はターミナルを開いたままにし、終了は `Ctrl+C`。同じコードで次回起動するだけなら `npm start`、更新後は再ビルドしてください。
 
-## 設定・保存
+5. ブラウザで http://127.0.0.1:3000 を開きます。サーバーはこのPCのループバックアドレスで待ち受けます。
 
-- 作業場所の既定値は Windows では `%LOCALAPPDATA%\slide-studio-neo`、それ以外では `$XDG_DATA_HOME/slide-studio-neo`（未設定なら `~/.local/share/slide-studio-neo`）です。環境変数 `NEO_WORKSPACE` で変更でき、相対パスはサーバー起動時の作業ディレクトリ（process.cwd()）から解決します。
-- 作業場所の中に settings.json、requests/YYYY-MM-DD-題名-ID/、history.json（偽AIは history.fake.json）を保存します。
-- 旧版で作った依頼は repo の workspace/requests/ にあります。自動移行はしないため、必要なら新しい場所の requests/ へ手で移してください。
-- 各依頼には request.md（5行＋版・配色）、material.md、attachments/、design.md、成果物（slides.pptx / index.html）、check.md、review.md（詳細だけ）、revision.md、run.log、state.json が残ります。議事録では design.md の代わりに ledger.md、成果物は minutes.md と minutes.pdf（作成できる場合）です。
-- スライドは、簡易は設計図で止めず制作・自己検査。詳細は設計図承認後に制作・自己検査・別起動のCodexレビュー・作ったAIによる1周の手直し。Codexが利用できない場合と実行中に失敗した場合は、新しく起動したread-onlyのClaude Codeへ代替し、Codexレビュー未実施を記録します。両方失敗した場合もレビューなし・手直し省略で完了し、その旨を表示します。ユーザーの中断時は切り替えません。
-- スライドの詳細版の設計図は右端パネルで確認します。×で畳むとつまみから再表示できます。おまかせ配色では3組から選びます。
-- 停止・失敗時もファイルを残します。「同じAIで再開」「もう一方のAIで続ける」は手動操作です。サーバー再起動後は履歴で停止扱いにし、同じモードで再開できます。偽AIの依頼を実CLIで再開することは拒否します。
-- 設定のAI・モデル・深さは保存した既定値です。上部の札では依頼だけ変更できます。深さの自動は簡易 medium / 詳細 high。モデル候補・下限は設定ファイルにあり、画面・サーバーの両方で品質下限を確認します。レビューの下限は high です。
-- 貼り付けは50万文字まで。添付は20件・合計50MBまで（txt / md / docx / pdf / xlsx / csv / pptx / png / jpg / jpeg / webp）。長い素材はファイルを添付してください。
+## 使い方と今の生成フロー
 
-## 実行・保護の仕組み
+素材を貼り付けるか添付し、社内用／社外用・目的・出力・レベルを選んで生成します。設定画面のAI・モデル・深さは保存する既定値で、上部の札ではその依頼だけ変更できます。CLIを導入・ログインし直した後は画面の「CLIを再確認」を使えます。
 
-CLIは依頼フォルダをcwdにして、シェルを挟まず引数配列で起動し、stdinを閉じます。Windowsのnpm用.cmdは対応するNodeエントリポイントを起動します。ANTHROPIC_API_KEY / OPENAI_API_KEY / CODEX_API_KEY / ANTHROPIC_AUTH_TOKEN は大文字小文字にかかわらず子プロセスの環境から外します。CLIのヘルプ・ログイン状態確認も同じ環境で行います。
+### スライド
 
-Codexは制作 workspace-write / レビュー read-only。ClaudeはdontAskと許可ツールのパスを絞り、Pythonはスライド制作時に依頼フォルダの build_slides.py だけを許可します。議事録制作ではBashを許可せず、Read・Write・Editだけを渡します。Claudeのツール制限はOSのファイル隔離と同一ではないため、独立したClaudeのセキュリティレビュー対象です。共通CLI設定や認証情報を書き換えません。
+- 簡易：設計図で止まらず、制作・機械検査・AIの自己検査まで進みます。
+- 詳細：設計図と配色を確認し、承認後に制作・機械検査・自己検査・レビュー・1周の手直しへ進みます。レビューは作ったAIと同じAIを新しく起動し、1回行います。
+- AUTO：作るAIが簡易／詳細とその理由を判断します。
 
-HTTP APIはローカルHost・Originと画面用トークンを検証します。素材と添付は命令として扱わないようCLIへ指示します。生成HTMLはスクリプトだけ許した隔離iframeで表示し、同一オリジン権限・通信・外部リソース・フォーム送信を制限します。成果物の配信は名前の許可リストと実パスで確認します。
+出力はHTMLまたは編集可能なpptxです。配色は100組から選べます。おまかせ配色は詳細で3候補を比較できます。
 
-## 配色・動き・目安
+### 議事録
 
-references/palettes/PALETTES_100.md を直接解析し、100組・4系統・既定026を読み込みます。先頭はおまかせ、末尾はブランドHEXです。横ドラッグ・減速・ホバー停止・左右キーと、prefers-reduced-motion の通常横スクロールに対応します。
+出力はMarkdownとPDF、レベルは詳細固定です。途中の台帳承認を挟まず進みます。
 
-GSAPは optional dependency です。入っていればGSAPのtickerを使用し、取得できない環境では同じ移動計算をrequestAnimationFrameで動かします。独自の慣性計算を使い、Draggable / InertiaPlugin のソースは取り込んでいません。Google Fontsを読めない場合も日本語ラベルとシステムフォントで操作できます。
+- 社内用：台帳・本文・自己確認をまとめて作り、機械検査・PDFまで進みます。
+- 社外用：上に加えて、作ったAIと同じAIによる1回のレビューを行います。レビュー役が本文を修正します。利用上限などでレビューが止まった場合は再開できます。
 
-目安はAI・モデル・深さ・版・出力形式別の実績中央値（3件以上）を使用し、それまでは要件の初期値を使います。偽AIの画面では、短いテスト待機時間を生成時間と誤認しないよう常に初期値を使います。スライドの詳細は設計図／本番の2つのメーター。議事録は保存→台帳→議事録→検査→レビュー→手直しの連続したメーターです。確認待ちでは経過を止め、設計図完了と表示し、メーターは99%に保持します。100%は成果物完成時だけにする指示を優先したため、モックの確認待ち100%から変更しています。目安を過ぎた段階は上限の手前で止めます。
+完成後に台帳を読めます。「表示／編集」でMarkdownを編集し、「保存してPDFを作り直す」で保存とPDF再作成ができます。AIへの直し指示も使えます。基本はA4 2枚以下、内容が多い場合は3枚を目安とし、初回のPDFが3枚を超えると論点と経緯を1回だけ自動短縮します。PDFを作れない場合もMarkdownを残し、理由を表示します。
 
-## テスト
+### 機械検査（P1）
 
-~~~powershell
+スライドはツールが描画と、寸法・文字の大きさ・はみ出しなど測って決まる項目を検査します。HTMLはChrome / Edge、pptxの構造はPython・python-pptx、Windowsでのpptx画像化はPowerPointを使います。LibreOfficeでもプレビューを作れますが、PowerPointでの描画検査とは別です。画像化できなかった項目は未判定として残るため、ダウンロードしたpptxを確認してください。
+
+議事録は見出し構成・宿題の表・引用・数字と素材の照合などを機械検査します。結果は成果物と一緒に確認でき、AIは判断が必要な内容を確認します。機械検査の合格だけで内容の正しさを保証するものではありません。
+
+### 利用上限で止まったら
+
+CLIの利用上限が解除されるのを待ち、履歴から依頼を開いて「再開」してください。保存済みの段階・ファイルを使って続けます。サーバー再起動後も履歴から再開できます。生成途中で停止しても依頼フォルダは残ります。
+
+## 作業場所・設定・依頼フォルダ
+
+作業データはrepoの外に保存します。
+
+| 項目 | 保存先 |
+|---|---|
+| Windowsの既定の作業場所 | `%LOCALAPPDATA%\slide-studio-neo` |
+| Windows以外の既定 | `$XDG_DATA_HOME/slide-studio-neo`。未設定なら `~/.local/share/slide-studio-neo` |
+| 設定 | 作業場所の `settings.json`（設定画面に実際のパスを表示） |
+| 依頼フォルダ | 作業場所の `requests/YYYY-MM-DD-題名-ID/` |
+| 時間の実績 | 作業場所の `history.json`（偽AIは `history.fake.json`） |
+
+環境変数 `NEO_WORKSPACE` で作業場所を変更できます。相対パスは起動時のrepoルート（`process.cwd()`）から解決します。例えばPowerShellでは、起動前に指定します。
+
+```powershell
+$env:NEO_WORKSPACE = 'D:\NEO-data'
+npm run doctor
+npm run app
+```
+
+各依頼には `request.md`、`material.md`、`attachments/`、`state.json`、`run.log` と成果物が残ります。スライドは `design.md`・`slides.pptx` または `index.html`、議事録は `ledger.md`・`minutes.md`・`minutes.pdf`（変換できた場合）です。検査・レビュー等の記録も該当する処理で保存します。別のPCへ過去データを移す場合は、サーバーを止めて作業場所をコピーし、移行先の `NEO_WORKSPACE` を合わせてください。
+
+PDF用ブラウザが自動検出されない場合は `NEO_BROWSER` にChrome / Edgeの実行ファイルの絶対パスを指定できます。`NEO_BROWSER=none` はPDFなしの動作確認用です。
+
+## CLIの実行とAPIキー
+
+APIキーの入力欄はありません。NEOはCLIを起動する時に `ANTHROPIC_API_KEY`・`OPENAI_API_KEY`・`CODEX_API_KEY`・`ANTHROPIC_AUTH_TOKEN` を大文字小文字にかかわらず子プロセスの環境から外します。CLIのヘルプ・ログイン状態の確認も同じ環境で行います。サブスク認証で使い、APIキー課金を避ける仕組みです。doctorは値を表示せず、該当変数があることだけを注意表示します。
+
+CLIは依頼フォルダを作業場所にし、シェルを挟まず起動します。利用者の共通CLI設定や認証情報を書き換えません。制作規則はこのrepoの `prompts/` が正本です。姉妹repoの導入は不要です。
+
+## 開発者向け
+
+### 型検査・単体テスト
+
+```powershell
 npm run lint
 npm test
-~~~
+```
 
-lint は TypeScript の型検査です。単体・段階実行テストは偽AIを使い、実CLIの生成を呼びません。テスト実行時は NEO_WORKSPACE を os.tmpdir() 配下の一時フォルダに切り替え、利用者の作業場所を汚しません。
+lintはTypeScriptの型検査です。テストは偽AIと一時作業場所を使い、実CLIで生成しません。doctorのNodeバージョン・AIの必須判定・終了コード・書き込み確認も単体テストに含みます。
 
-HTTPとブラウザのテストは、別ターミナルで次の偽AIサーバーを起動してから実行します。
+### 開発起動・偽AI
 
-~~~powershell
-$env:NEO_FAKE_AI = "1"
-$env:NEO_FAKE_DELAY_MS = "180"
+```powershell
+$env:NEO_FAKE_AI = '1'
+$env:NEO_FAKE_DELAY_MS = '180'
 npm run dev -- --port 3210
-~~~
+```
 
-~~~powershell
+偽AIは実CLIの生成を呼ばず、動作確認用の成果物を返します。実AIの品質・所要時間の検証には使えません。doctorは `NEO_FAKE_AI=1` でも実際のCLIのログイン状態を確認します。素材の `[question]` は質問、`[error]` は本番でのエラーを再現します。テスト後は追加した環境変数を解除してください。
+
+別ターミナルで偽AIサーバーに対して実行します。
+
+```powershell
 npm run test:http
 npm run test:browser
 npm run test:e2e
-~~~
+```
 
-ブラウザテストはインストール済みChromeの独立したヘッドレスプロファイルを test-results/ 配下に作って使います。必要なら CHROME_PATH と NEO_TEST_URL を設定してください。成功時の画像は test-results/verification/ に保存します。実際のChromeセッション・プロファイルを操作しません。
+必要に応じて `NEO_TEST_URL`・`CHROME_PATH` を設定します。ブラウザテストは `test-results/` 内の独立したChromeプロファイルを使います。制限付きWindows環境でテスト用Chromeが起動しない時は、テスト時だけ `NEO_TEST_NO_SANDBOX=1` を指定できます。偽AIサーバーのPDFにも適用する場合は、起動前に `$env:NODE_OPTIONS = '--import=./tests/pdf-browser-hook.mjs'` を設定します。通常利用の設定にはしないでください。
 
-制限付きのWindowsテストアカウントでChromeのレンダラーが起動せず `Page.enable` がタイムアウトする場合は、テスト実行側だけ `$env:NEO_TEST_NO_SANDBOX = "1"` を指定できます。単体のPDFテストとブラウザテストで起動する独立Chromeにだけ適用されます。ブラウザを自動検出できない場合は `$env:NEO_BROWSER = "C:/Program Files/Google/Chrome/Application/chrome.exe"` も指定してください。アプリ本体のPDF起動引数、iframeのsandbox、テストの判定は変えません。偽AIサーバーのPDF印刷もこの制限で失敗する場合は、サーバー起動側にも `NEO_TEST_NO_SANDBOX=1` を設定し、`$env:NODE_OPTIONS = "--import=./tests/pdf-browser-hook.mjs"` を付けてから上記のdevコマンドを実行してください。このフックは偽AIかつ明示的なテスト設定時のPDF印刷だけに適用されます。テスト後は追加した環境変数を解除してください。
-
-ライセンス: MIT（[LICENSE](LICENSE)）。第三者ライブラリの扱いは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。制作規則の読む順は [prompts/README.md](prompts/README.md)。
+ライセンス：MIT（[LICENSE](LICENSE)）。第三者ライブラリは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、制作規則の読む順は [prompts/README.md](prompts/README.md) を参照してください。

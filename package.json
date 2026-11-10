@@ -6,6 +6,8 @@
     "dev": "next dev --hostname 127.0.0.1 --webpack",
     "build": "next build --webpack",
     "start": "next start --hostname 127.0.0.1",
+    "app": "npm run build && npm start",
+    "doctor": "node --import tsx scripts/doctor.ts",
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "node --import tsx --test tests/*.e2e.ts",
