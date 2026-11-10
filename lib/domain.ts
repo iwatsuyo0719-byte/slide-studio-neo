@@ -40,6 +40,8 @@ export interface Question {
 export interface RecordData {
     minutes?: string;
     minutesCheckNote?: string;
+    // スライドの機械検査で不合格だった項目（P1）
+    inspectNote?: string;
     pdfNote?: string;
     pdfPages?: number;
     pdfPageNote?: string;

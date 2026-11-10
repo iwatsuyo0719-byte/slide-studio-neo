@@ -8,6 +8,7 @@ import { locate, execute, statuses, cliArgs, terminate, sandboxFailed } from './
 import { fakeStage } from './fake';
 import { prepareRules, bundledInstruction } from './bundle';
 import { createMinutesPDF, countPDFPages } from './pdf';
+import { inspectSlides } from './inspect';
 import { checkMinutesFiles } from './minutes-check';
 type Job = {
     controller: AbortController;
@@ -87,10 +88,10 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, shorten = fals
         '段階：' + stage + '。以下の契約ファイル名を守ります。設計図以降も request.md・material.md・design.md を読む。answer.md・design-feedback.md・final-feedback.md があれば必ず読み、回答・直し指示を反映します。',
         '現在の版：' + (r.selectedLevel || r.input.level) + '。配色選択：' + (r.chosenPalette || r.input.palette) + '。出力は ' + r.input.formats.join(' と ') + '。',
         stage === '設計図' ? '質問が必要なら最大1回、question.json に {"text":"質問","options":["A：...","B：...","C：..."]} を保存して終了。既に回答済みなら質問しない（asked=' + r.asked + '）。質問なし／回答後は decision.json に {"level":"簡易 または 詳細","reason":"選んだ理由1行"} を保存し、design.md に見出しの縦読み・ページごとの型・数字台帳・残る質問を記録。AUTO以外は指定の版を使う。おまかせ配色の時だけ、' + (rules ? rules + ' 内の配色表' : '正本配色表 ' + path.resolve(repo, 'references/palettes/PALETTES_100.md')) + ' から、詳細なら3組・簡易なら1組を palette-candidates.json（番号文字列の配列）へ保存。詳細は palette-comparison.html も作る。設計図以外の本番制作には進まない。' : '',
-        stage === '本番' ? 'design.md と approved.md を読み、本番だけ制作。HTMLは index.html 1ファイル、pptxは編集可能な slides.pptx。必要なら python-pptx を使う build_slides.py を依頼フォルダに作成し python build_slides.py だけを実行する。未提示の数字を埋めない。' : '',
-        stage === '検査' ? '本番のレンダリングを preview/ に保存して実画像を確認。見出し文型・はみ出し・重なり・最小文字・空白・数字の出所・試作でつまずいた3点を check.md に記録。未達・実行できない項目は未達／未確認。改善案も記録。' : '',
-        review ? '新しい独立レビューです。ファイルを書き換えず read-only で、request.md・material.md・design.md・成果物・check.md・preview/画像・採用規則を読む。主張・数値・証拠・型と構図・規準を確認。応答本文をMarkdownの総合判定＋ページ／重要度／根拠／修正方法を持つ指摘一覧にする。サーバーが応答を review.md に保存する。' : '',
-        stage === '手直し' ? 'review.md（あれば）と final-feedback.md（あれば）を読み、1周だけ直す。修正後の画像を作り実画像で再確認する。check.md を更新し、revision.md に対応・未達・修正後の画像確認結果を書く。' : '',
+        stage === '本番' ? 'design.md と approved.md を読み、本番だけ制作。HTMLは index.html 1ファイル、pptxは編集可能な slides.pptx。必要なら python-pptx を使う build_slides.py を依頼フォルダに作成し python build_slides.py だけを実行する。未提示の数字を埋めない。描画（画像化）と、寸法・見出しの字数・文字の大きさ・はみ出し・色・数値の出所の検査はツールが行う。PowerPointやブラウザを自分で起動しない。' : '',
+        stage === '検査' ? 'ツールが描画した preview/page-*.png と機械検査の結果 check-auto.md を読む（自分で描画・計測しない。PowerPointやブラウザを起動しない）。check-auto.md の不合格は成果物を直してよい（直したらツールが描画と機械検査をやり直す）。AIが判定するのは、主張と根拠の一致、根拠の誠実さ（規則の追加の点検）、型が主張に合っているか、画像で見た読みやすさ・重なりの4点だけ。check.md には機械検査の結果を写さず、この4点の判定と改善案を短く書く。' : '',
+        review ? '新しい独立レビューです。ファイルを書き換えず read-only で、request.md・material.md・design.md・成果物・check.md・check-auto.md・preview/画像・採用規則を読む。主張・数値・証拠・型と構図・規準を確認。応答本文をMarkdownの総合判定＋ページ／重要度／根拠／修正方法を持つ指摘一覧にする。サーバーが応答を review.md に保存する。' : '',
+        stage === '手直し' ? 'review.md（あれば）と final-feedback.md（あれば）を読み、1周だけ直す。描画と機械検査は直した後にツールがやり直すので、自分で描画しない。check.md を更新し、revision.md に対応・未達を書く。' : '',
         review ? '' : 'review.md はレビュー段階の結果専用なので、この段階では作らない・書き換えない。自己点検の記録は check.md などこの段階の契約ファイルに書く。'
     ].filter(Boolean).join('\n');
     let buffer = '';
@@ -203,6 +204,24 @@ async function minutesPDF(r: RecordData, job?: Job) {
         await log(r, r.pdfPageNote);
     }
 }
+async function slideAutoCheck(r: RecordData, job: Job) {
+    // P1：描画と測れば決まる検査はツールが行う。失敗しても生成は止めない
+    const started = Date.now();
+    // 偽AIの成果物はダミーなので、描画・計測はしない（テストを重くしない）
+    if ((fake() && process.env.NEO_FAKE_INSPECT !== '1') || process.env.NEO_INSPECT === '0') return;
+    try {
+        const palette = (await palettes()).find(p => p.id === (r.chosenPalette || r.input.palette));
+        const result = await inspectSlides(requestDir(r.id), r.input, palette, job.controller.signal, c => { job.child = c; });
+        r.inspectNote = result.failed.length ? '機械検査で不合格：' + result.failed.join('・') : undefined;
+        await log(r, '機械検査（' + Math.round((Date.now() - started) / 1000) + '秒、画像' + result.rendered + '枚）' + (r.inspectNote ? '：' + r.inspectNote : '：不合格なし'));
+    } catch (error) {
+        if (job.controller.signal.aborted) throw error;
+        await log(r, '機械検査を実行できませんでした：' + String(error));
+    }
+    r.timings['機械検査' as Stage] = (r.timings['機械検査' as Stage] || 0) + Date.now() - started;
+    await artifacts(r);
+    await save(r);
+}
 async function previews(r: RecordData, job: Job) {
     if (!r.files.includes('slides.pptx'))
         return;
@@ -312,6 +331,7 @@ function launch(r: RecordData, start: Stage) {
                 if (isMinutes(r.input) && st === 'レビュー' && start === 'レビュー') await minutesAutoCheck(r);
                 if (!await run(r, st, job)) reviewed = false;
                 if (isMinutes(r.input)) await minutesAutoCheck(r);
+                else if (st === '本番' || st === '検査' || st === '手直し') await slideAutoCheck(r, job);
             }
             if (isMinutes(r.input)) {
                 if (start === 'PDF') await minutesAutoCheck(r);
@@ -346,7 +366,7 @@ function launch(r: RecordData, start: Stage) {
                     }
                 }
                 r.timings.PDF = Date.now() - r.stageStart;
-            } else await previews(r, job);
+            }
             if (job.controller.signal.aborted && !shorteningRestored)
                 throw Error('中断しました');
             await artifacts(r);
