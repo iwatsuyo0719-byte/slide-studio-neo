@@ -15,7 +15,7 @@ export async function GET(req: Request) {
         if (url.searchParams.has('history'))
             return json(await list());
         const [s, p, h, c] = await Promise.all([settings(), palettes(), history(), statuses(url.searchParams.has('refresh'))]);
-        return json({ settings: s, palettes: p, history: h, cli: c, token, fake: process.env.NEO_FAKE_AI === '1' });
+        return json({ settings: s, palettes: p, history: h, cli: c, token, fake: process.env.NEO_FAKE_AI === '1', settingsFile: path.join(workspace, 'settings.json') });
     }
     catch (e) {
         return json({ error: String(e) }, 400);
