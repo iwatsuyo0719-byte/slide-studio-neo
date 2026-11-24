@@ -3,6 +3,9 @@ import path from 'node:path';
 import { isMinutes, type Input, type Stage } from '../lib/domain';
 import { atomicText } from './store';
 
+export const compactDesign = '簡易版・AUTOの design.md は、本番で使う見出しの縦読み・ページごとの型と配置・数字台帳（値・期間・出所）・注・残る質問だけを記録します。数字台帳の値・出所の列は減らしません。検算は行ってよいが結果だけを残し、計算式や検算の過程は書きません。';
+export const continuousSlides = (input: Input) => !isMinutes(input) && input.level !== '詳細';
+
 // A parent section includes its ### children. Never silently omit missing rules.
 export function section(md: string, heading?: string) {
     const headings = [...md.matchAll(/^(#{2,3}) (.+)\r?$/gm)];
@@ -69,6 +72,15 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
             await whole('evidence.md');
             if (transcriptLike(await fs.readFile(path.join(dir, 'material.md'), 'utf8'))) await whole('meeting.md');
             if (input.palette === 'auto') add('references/palettes/PALETTES_100.md', '配色表', await fs.readFile(path.join(root, 'references/palettes/PALETTES_100.md'), 'utf8'));
+            if (continuousSlides(input)) {
+                chunks.push('## 簡易版・AUTOの設計図\n\n' + compactDesign);
+                coreSection('図の共通文法');
+                coreSection('描画寸法と色');
+                add('core.md', '保存する設計と成果物（本番）', outputRules(saved, input.formats));
+                chunks.push('## 簡易を選んだ場合の本番規則\n\n詳細なら本番には進まず設計図で止めます。簡易なら同じ起動で続けて本番を制作します。型の規則は上記48型を使います。採用した根拠の型 E01〜E12 の手本は正本 prompts/evidence/<採用ID>.md を必ず読みます。アイコンを使う場合だけ正本 prompts/icons.md を読みます。');
+                const request = await fs.readFile(path.join(dir, 'request.md'), 'utf8') + '\n' + await fs.readFile(path.join(dir, 'material.md'), 'utf8');
+                if (input.formats.includes('html') && /操作可能|インタラクティブ|interactive|スライダ|クリックで|動くHTML/i.test(request)) await whole('interactive.md');
+            }
         } else {
             if (stage === '本番') {
                 coreSection('主張を先に定める');
@@ -107,5 +119,5 @@ export async function prepareRules(options: BundleOptions, log: (line: string) =
     }
 }
 export function bundledInstruction(name: string, prompts: string) {
-    return '規則は ' + name + ' にまとめてあります。制作規則はこれだけを読みます。正本 ' + prompts + '/ を開くのは、rulesに書かれた手本（examples/*.pptx など）を開く時だけです。prompts/ は読み取り専用です。';
+    return '規則は ' + name + ' にまとめてあります。制作規則はこれだけを読みます。正本 ' + prompts + '/ を開くのは、rulesに書かれた手本（examples/*.pptx など）や明示された追加規則を開く時だけです。prompts/ は読み取り専用です。';
 }
