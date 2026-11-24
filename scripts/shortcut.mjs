@@ -18,7 +18,7 @@ fs.writeFileSync(vbs, [
     'Set sh = CreateObject("WScript.Shell")',
     'desk = sh.SpecialFolders("Desktop")',
     'Set link = sh.CreateShortcut(desk & "\\SLIDE STUDIO NEO.lnk")',
-    'link.TargetPath = sh.ExpandEnvironmentStrings("%SystemRoot%") & "\System32\wscript.exe"',
+    'link.TargetPath = sh.ExpandEnvironmentStrings("%SystemRoot%") & "\\System32\\wscript.exe"',
     'link.Arguments = Chr(34) & WScript.Arguments(0) & Chr(34)',
     'link.WorkingDirectory = WScript.Arguments(1)',
     'link.Description = "SLIDE STUDIO NEO を起動してブラウザで開く"',
