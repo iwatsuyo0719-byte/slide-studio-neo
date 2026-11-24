@@ -5,6 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { isMinutes, requestTitle, requestText, validateInput, effectiveAI, historyKey, type Input, type RecordData, type Stage } from '../lib/domain';
 import { repo, atomicText, requestDir, readRecord, save, settings, palettes, artifacts, sample, allRecords, jsonRead, safeFile } from './store';
 import { locate, execute, statuses, cliArgs, terminate, sandboxFailed } from './cli';
+import { applyTextEdits, validateEdits } from './text-edit';
+import { snapshotArtifacts } from './store';
 import { fakeStage } from './fake';
 import { prepareRules, bundledInstruction, compactDesign, continuousSlides } from './bundle';
 import { createMinutesPDF, countPDFPages } from './pdf';
@@ -70,7 +72,7 @@ export function minutesProtocol(r: RecordData, stage: Stage, dir: string, prompt
         'ledger.md・minutes.md が既にあれば読み、続きから仕上げます。修正時は必ずディスク上の最新の minutes.md を読み、手動編集を引き継ぎます。final-feedback.md があれば反映します。',
         stage === 'レビュー' ? '新しい独立レビューです。会話を引き継がず request.md・material.md・attachments/・ledger.md・minutes.md・check.md・check-auto.md を読みます。機械検査の不合格を直し、素材との食い違い・決定と宿題の取り違え・経緯の飛躍・未確認の付け忘れを確認。その場で minutes.md を直し、指摘を review.md、直した内容と未達を revision.md に保存。check.md も更新します。変更不要でも minutes.md と check.md は保存し直します。' : '',
         stage === '作る' && !shorten ? '1回で台帳 ledger.md → 議事録 minutes.md → 自己確認 check.md まで止まらず仕上げます。規則は rules ファイル（P2）。測れば分かる確認はツールがするので自分で測らない。' : '',
-        stage === '手直し' && !shorten ? 'final-feedback.md に従い最新の minutes.md を1周修正し、check.md と revision.md に対応・未達を保存します。' : '',
+        stage === '手直し' && !shorten ? 'final-feedback.md に従い最新の minutes.md を1周修正し、［場所：…］がある時は、その場所を優先して直し、他は変えない。check.md と revision.md に対応・未達を保存します。' : '',
         shorten ? 'PDFが3枚を超えました。最新の minutes.md を元に、論点と経緯を短くまとめ直します。基本約1,600〜1,800字（A4 2枚以下）、多い時約2,500字まで。決定事項・宿題・未確認事項は削らない。事実や引用を変えず短縮だけを1回行い、check.md を更新し revision.md に対応を追記します。' : '',
         stage !== 'レビュー' ? 'review.md は独立レビュー専用なので作成・変更しません。' : ''
     ].filter(Boolean).join('\n');
@@ -103,7 +105,7 @@ async function actualStage(r: RecordData, stage: Stage, job: Job, shorten = fals
         stage === '本番' ? 'design.md と approved.md を読み、本番だけ制作。HTMLは index.html 1ファイル、pptxは編集可能な slides.pptx。必要なら python-pptx を使う build_slides.py を依頼フォルダに作成し python build_slides.py だけを実行する。未提示の数字を埋めない。描画（画像化）と、寸法・見出しの字数・文字の大きさ・はみ出し・色・数値の出所の検査はツールが行う。PowerPointやブラウザを自分で起動しない。' : '',
         stage === '検査' ? 'ツールが描画した preview/page-*.png と機械検査の結果 check-auto.md を読む（自分で描画・計測しない。PowerPointやブラウザを起動しない）。check-auto.md の不合格は成果物を直してよい（直したらツールが描画と機械検査をやり直す）。AIが判定するのは、主張と根拠の一致、根拠の誠実さ（規則の追加の点検）、型が主張に合っているか、画像で見た読みやすさ・重なりの4点だけ。check.md には機械検査の結果を写さず、この4点の判定と改善案を短く書く。' : '',
         review ? '新しい独立レビューです。ファイルを書き換えず read-only で、request.md・material.md・design.md・成果物・check.md・check-auto.md・preview/画像・採用規則を読む。主張・数値・証拠・型と構図・規準を確認。応答本文をMarkdownの総合判定＋ページ／重要度／根拠／修正方法を持つ指摘一覧にする。サーバーが応答を review.md に保存する。' : '',
-        stage === '手直し' ? 'review.md（あれば）と final-feedback.md（あれば）を読み、1周だけ直す。描画と機械検査は直した後にツールがやり直すので、自分で描画しない。check.md を更新し、revision.md に対応・未達を書く。' : '',
+        stage === '手直し' ? ((r.revisionCount || 0) > 1 ? '今回の直し指示 final-feedback.md だけに従う（review.md の指摘は前回までに扱い済みなので読まない。ユーザーが手で直した文字を戻さない）。' : 'review.md（あれば）と final-feedback.md（あれば）を読み、') + '1周だけ直す。［場所：…］がある時は、その場所を優先して直し、他は変えない。描画と機械検査は直した後にツールがやり直すので、自分で描画しない。check.md を更新し、revision.md に対応・未達を書く。' : '',
         review ? '' : 'review.md はレビュー段階の結果専用なので、この段階では作らない・書き換えない。自己点検の記録は check.md などこの段階の契約ファイルに書く。'
     ].filter(Boolean).join('\n');
     let buffer = '';
@@ -470,6 +472,8 @@ export async function create(raw: unknown, files: File[]) {
     launch(r, '設計図');
     return r;
 }
+export function act(id: string, action: 'edit-text', data: Record<string, unknown>): Promise<{ record: RecordData; results: ReturnType<typeof applyTextEdits>['results'] }>;
+export function act(id: string, action: string, data?: Record<string, unknown>): Promise<RecordData>;
 export async function act(id: string, action: string, data: Record<string, unknown> = {}) {
     if (locks.has(id))
         throw Error('処理中です');
@@ -500,6 +504,21 @@ export async function act(id: string, action: string, data: Record<string, unkno
         const r = await current(id), dir = requestDir(id);
         if (Boolean(r.fake) !== fake())
             throw Error('この依頼は' + (r.fake ? '偽AI' : '実CLI') + 'モードで作成されました。同じモードで再開してください');
+        if (action === 'edit-text') {
+            if (isMinutes(r.input) || r.status !== 'done' || !r.files.includes('index.html')) throw Error('完了したHTMLだけ文字を直せます');
+            const edits = validateEdits(data.edits);
+            const file = await safeFile(id, ['index.html']);
+            const original = await fs.readFile(file, 'utf8');
+            const edited = applyTextEdits(original, edits);
+            if (edited.results.some(result => result.saved)) {
+                await snapshotArtifacts(r, ['index.html']);
+                await atomicText(file, edited.source);
+                await slideAutoCheck(r, { controller: new AbortController() });
+                await artifacts(r);
+                await save(r);
+            }
+            return { record: r, results: edited.results };
+        }
         if (action === 'save-minutes') {
             if (!isMinutes(r.input) || r.status !== 'done')
                 throw Error('完了した議事録だけ保存できます');
@@ -546,8 +565,11 @@ export async function act(id: string, action: string, data: Record<string, unkno
             r.stage = '設計図';
         }
         else if (action === 'revise') {
-            if (r.status !== 'done' || r.revisionUsed || typeof data.feedback !== 'string' || !data.feedback.trim())
-                throw Error('完了後の直しは1周までです');
+            if (r.status !== 'done' || typeof data.feedback !== 'string' || !data.feedback.trim())
+                throw Error('完了した依頼への直し指示を入力してください');
+            await snapshotArtifacts(r);
+            r.revisionCount = (r.revisionCount ?? (r.revisionUsed ? 1 : 0)) + 1;
+            await fs.appendFile(path.join(dir, 'feedback-history.md'), '\n## ' + new Date().toISOString() + ' · ' + r.revisionCount + '回目\n\n' + data.feedback.slice(0, 10000) + '\n');
             r.revisionUsed = true;
             r.reviewNote = undefined;
             await fs.writeFile(path.join(dir, 'final-feedback.md'), data.feedback.slice(0, 10000));

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { safeFile } from '../../../../../server/store';
+import { injectPreviewTools } from '../../../../../server/preview-tools';
 import { guard, json } from '../../../../../server/http';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,9 @@ export async function GET(req: Request, { params }: {
         const preview = new URL(req.url).searchParams.has('preview');
         const html = ext === 'html';
         const type = html ? 'text/html; charset=utf-8' : ext === 'md' ? 'text/markdown; charset=utf-8' : ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : ext === 'jpg' ? 'image/jpeg' : ext === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'text/plain; charset=utf-8';
-        return new Response(await fs.readFile(p), { headers: { 'Content-Type': type, 'Content-Disposition': preview ? 'inline' : 'attachment; filename="' + encodeURIComponent(file.at(-1)!) + '"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': html ? "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" : "default-src 'none'" } });
+        const bytes = await fs.readFile(p);
+        const body = html ? injectPreviewTools(bytes.toString('utf8'), new URL(req.url)) : bytes;
+        return new Response(body, { headers: { 'Content-Type': type, 'Content-Disposition': preview ? 'inline' : 'attachment; filename="' + encodeURIComponent(file.at(-1)!) + '"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': html ? "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" : "default-src 'none'" } });
     }
     catch (e) {
         return json({ error: String(e) }, 404);

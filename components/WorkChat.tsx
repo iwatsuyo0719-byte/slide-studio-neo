@@ -78,16 +78,16 @@ export default function WorkChat({ record, now, meter, range, elapsed, feedback,
     useEffect(() => {
         if (follow.current && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
     }, [signature, record.id]);
-    const disabled = !done || record.revisionUsed || pending;
+    const disabled = !done || pending;
     return <aside className="work-chat" aria-label="作業チャット">
         <div className="work-chat-meters">
             <div className="work-chat-meter-heading"><strong>全体</strong><span className="percent">{meter.percent}%</span><span>経過 {timeText(elapsed)}</span></div>
             <div className="stages">{stages.map((stage, i) => <span key={stage} className={done || i < stages.indexOf(record.stage) ? 'complete' : stage === record.stage ? 'current' : ''}>{done || i < stages.indexOf(record.stage) ? '✓ ' : ''}{stageLabel(stage)}</span>)}</div>
             <div className={'meter' + (record.status === 'running' ? ' moving' : '')} role="progressbar" aria-label="作成の進み具合" aria-valuemin={0} aria-valuemax={100} aria-valuenow={meter.percent}><span style={{ width: meter.percent + '%' }}/></div>
             <div className="work-chat-meter-heading hint"><span>残り {done ? '0分' : record.status !== 'running' ? '—' : meter.overtime ? '計算中' : '約' + Math.max(1, Math.ceil(meter.remaining / 60000)) + '分'}</span><span>目安 {rangeText(range)}</span></div>
-            {done ? <div className="work-chat-current"><span>直しの残り回数</span><strong>残り {record.revisionUsed ? 0 : 1}回</strong></div> : <div className={'work-chat-current' + (seconds > 60 && record.status === 'running' ? ' work-chat-warning' : '')}><span title={currentWork}>いまの作業：{currentWork}</span><strong>{seconds}秒</strong></div>}
+            {done ? <div className="work-chat-current"><span>直し</span><strong>これまで {record.revisionCount ?? (record.revisionUsed ? 1 : 0)} 回</strong></div> : <div className={'work-chat-current' + (seconds > 60 && record.status === 'running' ? ' work-chat-warning' : '')}><span title={currentWork}>いまの作業：{currentWork}</span><strong>{seconds}秒</strong></div>}
             {!done && <div className="work-chat-current-track" role="meter" aria-label="今の作業の経過秒" aria-valuemin={0} aria-valuemax={Math.max(60, seconds)} aria-valuenow={seconds}><span style={{ width: Math.min(100, seconds / 60 * 100) + '%' }}/></div>}
-            <p className="progress-note">{done ? '完了 · 直しは1周まで使えます' : record.status === 'design' ? (minutes ? '台帳' : '設計図') + '完了・あなたの確認待ち' : record.status === 'question' ? '回答を選んでください' : record.status === 'running' ? 'いまの段階：' + stageLabel(record.stage) : record.error || '停止中'}</p>
+            <p className="progress-note">{done ? '完了 · 直しは何度でも使えます' : record.status === 'design' ? (minutes ? '台帳' : '設計図') + '完了・あなたの確認待ち' : record.status === 'question' ? '回答を選んでください' : record.status === 'running' ? 'いまの段階：' + stageLabel(record.stage) : record.error || '停止中'}</p>
             {meter.overtime && <p className="error-text">目安より長くかかっています</p>}
         </div>
         <div className="work-chat-log results-text" tabIndex={0} ref={logRef} onScroll={() => { const el = logRef.current!; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
@@ -103,7 +103,7 @@ export default function WorkChat({ record, now, meter, range, elapsed, feedback,
         </div>
         <div className="work-chat-compose feedback-row">
             <label className="sr-only" htmlFor="work-chat-feedback">完了後の直し指示</label>
-            <textarea id="work-chat-feedback" aria-label="完了後の直し指示" rows={2} value={feedback} disabled={disabled} onChange={e => onFeedback(e.target.value)} placeholder={record.revisionUsed ? '1周の直しを実施済みです' : !done ? '生成が完了すると直し指示を送れます' : minutes ? '直し指示（1周）例：決定事項を短く' : '直し指示（1周）例：2枚目のグラフを月別に'}/>
+            <textarea id="work-chat-feedback" aria-label="完了後の直し指示" rows={2} value={feedback} disabled={disabled} onChange={e => onFeedback(e.target.value)} placeholder={!done ? '生成が完了すると直し指示を送れます' : minutes ? '直し指示例：決定事項を短く' : '直し指示例：2枚目のグラフを月別に'}/>
             <div className="work-chat-compose-actions"><span className="hint">表示中のページ：{pageLabel || '—'}（指示に自動で添えます）</span><button disabled={disabled || minutesDirty || !feedback.trim()} aria-describedby={minutesDirty ? 'minutes-save-first' : undefined} onClick={onSend}>直しを送る</button></div>
             {minutesDirty && <span id="minutes-save-first" className="hint">先に保存してください</span>}
         </div>

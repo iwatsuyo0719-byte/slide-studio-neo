@@ -59,7 +59,10 @@ test('偽AIの全段階・履歴・配信範囲・中断再開を通す', async 
     await act(complete.id, 'revise', { feedback: '見出しを短く' });
     const revised = await waitFor(complete.id, 'done');
     assert.equal(revised.revisionUsed, true);
-    await assert.rejects(() => act(complete.id, 'revise', { feedback: 'もう一度' }));
+    await act(complete.id, 'revise', { feedback: 'もう一度' });
+    assert.equal((await waitFor(complete.id, 'done')).revisionCount, 2);
+    assert.equal((await fs.readdir(path.join(requestDir(complete.id), 'versions'))).length, 2);
+    assert.match(await fs.readFile(path.join(requestDir(complete.id), 'feedback-history.md'), 'utf8'), /見出しを短く[\s\S]*もう一度/);
     for (const audience of ['社内', '社外'] as const) {
         const auto = await create({ ...input, level: 'AUTO', audience }, []);
         let r = await waitFor(auto.id, audience === '社外' ? 'design' : 'done');
@@ -154,7 +157,11 @@ test('議事録：全レベルで社外2回起動、手動保存とAI修正は�
             assert.ok(revised.minutes!.startsWith(manual));
             assert.equal(revised.revisionUsed, true);
             assert.match(await fs.readFile(path.join(requestDir(done.id), 'revision.md'), 'utf8'), /決定事項を確認/);
-            const final = revised.minutes + '\nAI修正後の手動編集。\n';
+            await act(done.id, 'revise', { feedback: '2回目の議事録修正' });
+            const twice = await waitFor(done.id, 'done');
+            assert.equal(twice.revisionCount, 2);
+            assert.ok(twice.minutes!.startsWith(manual));
+            const final = twice.minutes + '\nAI修正後の手動編集。\n';
             assert.equal((await act(done.id, 'save-minutes', { minutes: final })).minutes, final);
             for (const stage of ['作る', 'レビュー', '手直し'] as const) {
                 const protocol = minutesProtocol(done, stage, 'request', 'prompts');

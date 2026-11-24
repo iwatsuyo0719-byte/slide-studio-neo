@@ -71,6 +71,8 @@ export interface RecordData {
     asked: boolean;
     answer?: string;
     revisionUsed: boolean;
+    revisionCount?: number;
+    versionCount?: number;
     error?: string;
     reviewed?: boolean;
     paletteCandidates?: string[];

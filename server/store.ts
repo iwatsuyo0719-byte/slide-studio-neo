@@ -156,6 +156,23 @@ export async function safeFile(id: string, parts: string[]) {
         throw Error('このファイルは公開できません');
     return real;
 }
+// Each mutation keeps an immutable copy of the previous deliverables.
+// 文字の書き換えは index.html だけ変わるので、names で退避するファイルを絞れる
+export async function snapshotArtifacts(r: RecordData, names: string[] = ['index.html', 'slides.pptx', 'minutes.md']) {
+    const count = Math.max(r.versionCount || 0, r.revisionCount ?? (r.revisionUsed ? 1 : 0)) + 1;
+    const base = requestDir(r.id);
+    const dir = path.join(base, 'versions', count + '-' + new Date().toISOString().replaceAll(':', '-'));
+    const versions = path.join(base, 'versions');
+    await fs.mkdir(versions, { recursive: true });
+    const realBase = await fs.realpath(base);
+    if (await fs.realpath(versions) !== path.join(realBase, 'versions')) throw Error('版の保存先にリンクは使えません');
+    await fs.mkdir(dir);
+    for (const name of names) {
+        try { await fs.copyFile(await safeFile(r.id, [name]), path.join(dir, name), fs.constants.COPYFILE_EXCL); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+    r.versionCount = count;
+}
 export async function artifacts(r: RecordData) {
     const base = requestDir(r.id);
     const files: string[] = [];

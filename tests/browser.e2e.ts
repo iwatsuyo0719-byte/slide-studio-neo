@@ -133,6 +133,55 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.ok(await evaluate("document.querySelector('.work-chat').textContent.includes('Claude Codeレビュー')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'done-1280.png'), Buffer.from(resultShot.data, 'base64'));
+        // Real fake-AI revisions stay available, then the sandboxed preview saves text without AI.
+        for (let revision = 1; revision <= 2; revision++) {
+            await evaluate("(()=>{const el=document.querySelector('.work-chat-compose textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'確認用の直し');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
+            await wait("!document.querySelector('.work-chat-compose button').disabled");
+            await evaluate("document.querySelector('.work-chat-compose button').click()");
+            await wait("document.querySelector('.work-chat-current')?.textContent.includes('これまで " + revision + " 回')");
+            assert.equal(await evaluate("document.querySelector('.work-chat-compose textarea').disabled"), false);
+        }
+        const frameContext = async () => {
+            const tree = await send('Page.getFrameTree');
+            const frame = tree.frameTree.childFrames?.find((f: { frame: { url: string } }) => /[?&](pick|edit)=1/.test(f.frame.url));
+            if (frame) return { contextId: (await send('Page.createIsolatedWorld', { frameId: frame.frame.id, worldName: 'neo-edit-test' })).executionContextId };
+            // Opaque sandbox frames may run in their own Chrome process.
+            const targets = await send('Target.getTargets', {}, false);
+            const target = targets.targetInfos.find((t: { type: string; url: string }) => t.type === 'iframe' && /[?&](pick|edit)=1/.test(t.url));
+            assert.ok(target, '編集用iframeのDevToolsターゲットがある');
+            return { sessionId: (await send('Target.attachToTarget', { targetId: target.targetId, flatten: true }, false)).sessionId };
+        };
+        const inFrame = async (expression: string) => {
+            const context = await frameContext();
+            const parentSession = session;
+            try {
+                if (context.sessionId) session = context.sessionId;
+                const result = await send('Runtime.evaluate', { expression, ...(context.contextId ? { contextId: context.contextId } : {}), returnByValue: true });
+                assert.equal(result.exceptionDetails, undefined);
+                return result.result.value;
+            } finally { session = parentSession; }
+        };
+        await click('場所を選ぶ');
+        await wait("document.querySelector('iframe[title=直す場所のプレビュー]')?.src.includes('pick=1')");
+        await delay(300);
+        await evaluate("window.postMessage({type:'neo-pick',page:'1',kind:'見出し',text:'偽の送信元'},'*')");
+        await delay(50);
+        assert.equal(await evaluate("document.querySelector('.work-chat-compose textarea').value.includes('偽の送信元')"), false);
+        await inFrame("document.querySelector('h1').click()");
+        await wait("document.querySelector('.work-chat-compose textarea').value.startsWith('［場所：P1・見出し')");
+        await click('場所を選ぶ');
+        await click('文字を直す');
+        await wait("document.querySelector('iframe[title=直す場所のプレビュー]')?.src.includes('edit=1')");
+        await delay(300);
+        await inFrame("(()=>{const el=document.querySelector('h1');el.click();if(!el.isContentEditable)throw Error('not editable');el.textContent='手動保存を確認';el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));})()");
+        await wait("document.querySelector('.artifact-edit-toolbar')?.textContent.includes('未保存 1件')");
+        await inFrame("(()=>{const el=document.querySelector('h1');el.click();el.textContent='手動保存を確認・確定待ち';})()");
+        await click('文字の変更を保存');
+        await wait("document.querySelector('.artifact-edit-message')?.textContent.includes('保存 1件')");
+        const savedHTML = await evaluate("fetch(document.querySelector('a.download[href*=index]').href).then(r=>r.text())");
+        assert.ok(savedHTML.includes('手動保存を確認・確定待ち'));
+        assert.ok(!savedHTML.includes('data-neo-preview-tools'));
+        assert.ok(await evaluate("document.querySelector('.work-chat-current').textContent.includes('これまで 2 回')"));
         // Add image pages through a browser-only fixture; no CLI generation or server files.
         await evaluate(`window.__previewFetch=window.fetch;window.fetch=async(...args)=>{
             const response=await window.__previewFetch(...args);
@@ -159,6 +208,13 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await evaluate("document.querySelector('.history-list button').click()");
         await wait("document.querySelectorAll('.thumbnails button').length===4");
         assert.deepEqual(await evaluate("[...document.querySelectorAll('.thumbnails button')].map(b=>b.textContent)"), ['HTML', 'ページ 1', 'ページ 2', 'ページ 3']);
+        await evaluate("document.querySelectorAll('.thumbnails button')[1].click()");
+        await click('場所を選ぶ');
+        await wait("document.querySelector('.artifact-edit-frame img')");
+        await evaluate("(()=>{const el=document.querySelector('.artifact-edit-frame img'),r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:r.left+r.width*.3,clientY:r.top+r.height*.2}));})()");
+        await wait("document.querySelector('.work-chat-compose textarea').value.includes('［場所：P1・左上付近（横30%・縦20%）］')");
+        await click('場所を選ぶ');
+        await evaluate("document.querySelectorAll('.thumbnails button')[0].click()");
         await evaluate("document.querySelector('.preview-expand').focus();document.querySelector('.preview-expand').click()");
         await wait("document.querySelector('.preview-dialog')?.open");
         assert.equal(await evaluate("document.body.style.overflow"), 'hidden');
@@ -191,7 +247,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await evaluate("document.querySelector('.preview-open').focus();document.querySelector('.preview-open').click()");
         await wait("document.querySelector('.preview-dialog')?.open");
         assert.equal(await evaluate("document.querySelector('.preview-dialog input').value"), 'ページ1を直す');
-        // Capture the revision request locally and return the used-up state.
+        // Capture a revision locally; further revisions remain available.
         await evaluate(`window.fetch=async(...args)=>{
             if(args[1]?.body && JSON.parse(args[1].body).action==='revise'){
                 window.__previewRevision=JSON.parse(args[1].body);
@@ -199,11 +255,11 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
             }
             return window.__previewFetch(...args);
         };document.querySelector('.preview-dialog .feedback-row button').click()`);
-        await wait("!document.querySelector('.preview-dialog') && document.querySelector('.work-chat-compose textarea').disabled");
+        await wait("!document.querySelector('.preview-dialog') && !document.querySelector('.work-chat-compose textarea').disabled");
         assert.equal(await evaluate("window.__previewRevision.feedback"), '［表示中：ページ1］\nページ1を直す');
         await evaluate("document.querySelector('.preview-open').focus();document.querySelector('.preview-open').click()");
         await wait("document.querySelector('.preview-dialog')?.open");
-        assert.equal(await evaluate("document.querySelector('.preview-dialog input').disabled && document.querySelector('.preview-dialog .feedback-row button').disabled"), true);
+        assert.equal(await evaluate("!document.querySelector('.preview-dialog input').disabled && document.querySelector('.preview-dialog .feedback-row button').disabled"), true);
         await evaluate("document.querySelector('[aria-label=拡大プレビューを閉じる]').click()");
         await wait("!document.querySelector('.preview-dialog')");
         assert.equal(await evaluate("document.activeElement===document.querySelector('.preview-open')"), true);
@@ -298,7 +354,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.match(await fetch(markdownURL).then(r=>r.text()), /手動保存の動作確認/);
         await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await click('直しを送る');
-        await wait("document.querySelector('.minutes-document')?.textContent.includes('手動保存の動作確認') && document.querySelector('[aria-label=完了後の直し指示]')?.placeholder==='1周の直しを実施済みです'");
+        await wait("document.querySelector('.minutes-document')?.textContent.includes('手動保存の動作確認') && document.querySelector('.work-chat-current')?.textContent.includes('これまで 1 回') && !document.querySelector('[aria-label=完了後の直し指示]')?.disabled");
         await click('編集');
         assert.ok(await evaluate("document.querySelector('.minutes-source').value.includes('手動保存の動作確認')"));
         await evaluate("(()=>{const el=document.querySelector('.minutes-source');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,el.value+'\\nAI修正後の保存確認。\\n');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
