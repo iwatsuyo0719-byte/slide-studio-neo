@@ -225,8 +225,8 @@ async function minutesPDF(r: RecordData, job?: Job) {
     }
 }
 async function slideAutoCheck(r: RecordData, job: Job) {
-    if (r.input.formats.includes('html')) {
-        try { await fitHtmlFile(requestDir(r.id)); }
+    if (r.input.formats.includes('html') && !r.input.motion) {
+        try { await fitHtmlFile(requestDir(r.id), r.input.motion); }
         catch (error) { await log(r, 'HTMLの画面サイズ調整を適用できませんでした：' + String(error)); }
     }
     // P1：描画と測れば決まる検査はツールが行う。失敗しても生成は止めない

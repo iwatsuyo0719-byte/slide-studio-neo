@@ -89,7 +89,7 @@ async function withBrowser<T>(fn: (send: (m: string, p?: unknown) => Promise<any
 // ページ内で実行する測定（文字列として渡す）
 const HTML_PROBE = `(() => {
   const toHex = c => { const m = c.match(/\\d+(\\.\\d+)?/g); if (!m || (m.length > 3 && +m[3] === 0)) return null; return '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join(''); };
-  const sections = [...document.querySelectorAll('section')];
+  const sections = window.__neoPages || [...document.querySelectorAll('section')];
   const pages = sections.map(s => {
     const r = s.getBoundingClientRect();
     const head = s.querySelector('h1, h2, [data-claim]');
@@ -99,36 +99,85 @@ const HTML_PROBE = `(() => {
       const t = walker.currentNode; const v = t.textContent.trim(); if (!v) continue;
       const el = t.parentElement; const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      if (!el.getClientRects().length) continue;
       texts.push(v); minFont = Math.min(minFont, parseFloat(cs.fontSize));
       const c = toHex(el instanceof SVGElement ? (cs.fill || cs.color) : cs.color); if (c) colors.add(c);
       const range = document.createRange(); range.selectNodeContents(t); const b = range.getBoundingClientRect();
+      // 閉じた詳細パネル（画面外に置いた dialog・aside）の文字は「はみ出し」に数えない
+      if (window.__neoPages && el.closest('[role="dialog"], [aria-hidden="true"], aside')) continue;
       if (b.width && (b.left < r.left - 1 || b.right > r.right + 1 || b.top < r.top - 1 || b.bottom > r.bottom + 1)) overflow++;
     }
     s.querySelectorAll('*').forEach(el => { const cs = getComputedStyle(el); for (const p of ['backgroundColor', 'fill', 'stroke']) { const c = cs[p] && cs[p] !== 'none' ? toHex(cs[p]) : null; if (c) colors.add(c); } });
     // h1/h2 が無い（SVGで描いた）ページは、32px以上で一番大きい文字を見出しとみなす
     let big = null, bigSize = 31;
     s.querySelectorAll('text, div, p, span').forEach(el => { const v = el.textContent.trim(); if (!v || el.children.length) return; const f = parseFloat(getComputedStyle(el).fontSize); if (f > bigSize) { bigSize = f; big = v; } });
-    return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, heading: head ? head.textContent.trim() : big, headingLines: head ? Math.round(head.getBoundingClientRect().height / parseFloat(getComputedStyle(head).lineHeight || '0') || 0) : 0, minFont: minFont === Infinity ? null : minFont, overflow, texts, colors: [...colors] };
+    return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, layoutW: s.offsetWidth, layoutH: s.offsetHeight, heading: head ? head.textContent.trim() : big, headingLines: head ? Math.round(head.getBoundingClientRect().height / parseFloat(getComputedStyle(head).lineHeight || '0') || 0) : 0, minFont: minFont === Infinity ? null : minFont, overflow, texts, colors: [...colors] };
   });
   return JSON.stringify(pages);
 })()`;
 
-async function inspectHTML(dir: string, signal?: AbortSignal, onChild?: (c: ChildProcess) => void) {
+async function inspectHTML(dir: string, motion: boolean, signal?: AbortSignal, onChild?: (c: ChildProcess) => void) {
     return withBrowser(async send => {
         await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await send('Page.enable');
-        await send('Page.navigate', { url: pathToFileURL(path.join(dir, 'index.html')).href });
+        await send('Page.navigate', { url: pathToFileURL(path.join(dir, 'index.html')).href + (motion ? '#static' : '') });
         for (let n = 0; n < 60; n++) {
             const ready = await send('Runtime.evaluate', { expression: 'document.readyState === "complete" && (!document.fonts || document.fonts.status === "loaded")', returnByValue: true });
             if (ready.result.value) break;
             await new Promise(r => setTimeout(r, 250));
         }
-        const pages = JSON.parse((await send('Runtime.evaluate', { expression: HTML_PROBE, returnByValue: true })).result.value) as { x: number; y: number; w: number; h: number; heading: string | null; headingLines: number; minFont: number | null; overflow: number; texts: string[]; colors: string[] }[];
+        const measure = async () => JSON.parse((await send('Runtime.evaluate', { expression: HTML_PROBE, returnByValue: true })).result.value) as { x: number; y: number; w: number; h: number; layoutW: number; layoutH: number; heading: string | null; headingLines: number; minFont: number | null; overflow: number; texts: string[]; colors: string[] }[];
         const preview = path.join(dir, 'preview');
         await fs.mkdir(preview, { recursive: true });
-        for (const [i, p] of pages.entries()) {
-            const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: p.x, y: p.y, width: Math.max(1, p.w), height: Math.max(1, p.h), scale: 1 } });
+        const capture = async (p: Awaited<ReturnType<typeof measure>>[number], i: number) => {
+            // 静止版で寸法0のsection（hidden等）は画像化だけ飛ばし、寸法の検査で不合格として残す
+            if (!(p.w > 0 && p.h > 0)) { if (motion) throw Error('ページの表示寸法を測れません'); return; }
+            const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: p.x, y: p.y, width: p.w, height: p.h, scale: 1 } });
             await fs.writeFile(path.join(preview, `page-${String(i + 1).padStart(2, '0')}.png`), Buffer.from(shot.data, 'base64'));
+        };
+        const pages: Awaited<ReturnType<typeof measure>> = [];
+        if (motion) {
+            // 一覧パネルを除き、見本のdata-pageを優先する。
+            const selected = await send('Runtime.evaluate', { expression: `(() => {
+                const tagged = [...document.querySelectorAll('section[data-page], section.sheet, section.slide')];
+                // 予備：一覧・詳細パネル・入れ子のsectionはページに数えない
+                window.__neoPages = tagged.length ? tagged : [...document.querySelectorAll('section:not(#overview):not([role="dialog"]):not([aria-modal="true"])')]
+                    .filter(s => !s.parentElement?.closest('section, [role="dialog"], aside'));
+                window.__neoDisplays = window.__neoPages.map(s => [s.style.getPropertyValue('display'), s.style.getPropertyPriority('display')]);
+                return window.__neoPages.length;
+            })()`, returnByValue: true });
+            const count = selected.result.value;
+            if (!count) throw Error('動く版のページ要素を特定できません');
+            for (let i = 0; i < count; i++) {
+                signal?.throwIfAborted();
+                // キー操作で内部状態も更新し、hidden方式のページを一枚ずつ測る。
+                await send('Runtime.evaluate', { expression: `(() => {
+                    // 数字キーは1〜9だけ。資料が body や canvas で受ける場合にも届くよう、そこにも送る
+                    if (${i} < 9) for (const t of new Set([document.activeElement, document.body, document])) t?.dispatchEvent(new KeyboardEvent('keydown', { key: '${i + 1}', bubbles: true }));
+                    window.__neoPages.forEach((s, n) => {
+                        s.hidden = n !== ${i};
+                        const [display, priority] = window.__neoDisplays[n];
+                        if (n !== ${i}) s.style.setProperty('display', 'none', 'important');
+                        else {
+                            s.style.setProperty('display', display === 'none' ? '' : display, priority);
+                            if (getComputedStyle(s).display === 'none') s.style.setProperty('display', 'block', 'important');
+                            // .active と opacity・visibility で切り替える資料でも、測るページは必ず見える状態にする
+                            const cs = getComputedStyle(s);
+                            if (cs.visibility === 'hidden') s.style.setProperty('visibility', 'visible', 'important');
+                            if (+cs.opacity < 1) s.style.setProperty('opacity', '1', 'important');
+                        }
+                    });
+                })()` });
+                await send('Runtime.evaluate', { expression: 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))', awaitPromise: true });
+                const measured = await measure();
+                const p = measured[i];
+                if (!p || p.minFont === null) throw Error('動く版のページ本文を測れません');
+                await capture(p, i);
+                pages.push(p);
+            }
+        } else {
+            pages.push(...await measure());
+            for (const [i, p] of pages.entries()) await capture(p, i);
         }
         return pages;
     }, signal, onChild);
@@ -251,15 +300,18 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
     for (const old of await fs.readdir(preview).catch(() => [] as string[])) if (/\.(png|jpe?g|pdf)$/i.test(old)) await fs.rm(path.join(preview, old), { force: true });
     if (input.formats.includes('html') && await fs.stat(path.join(dir, 'index.html')).catch(() => null)) {
         const html = await fs.readFile(path.join(dir, 'index.html'), 'utf8').catch(() => '');
-        checks['画面に合わせる処理（html）'] = html.includes(FIT_MARKER)
+        checks['画面に合わせる処理（html）'] = input.motion
+            ? { status: '未判定', evidence: '対象外：動く版は自前の拡大縮小を使う' }
+            : html.includes(FIT_MARKER)
             ? { status: '合格', evidence: 'ツールの画面サイズ調整の目印あり' }
             : { status: '不合格', evidence: 'ツールの画面サイズ調整の目印なし' };
         try {
-            const pages = await inspectHTML(dir, signal, onChild);
-            const bad = pages.filter(p => Math.round(p.w) !== 1920 || Math.round(p.h) !== 1080);
+            const pages = await inspectHTML(dir, input.motion === true, signal, onChild);
+            const bad = pages.filter(p => Math.round(input.motion ? p.layoutW : p.w) !== 1920 || Math.round(input.motion ? p.layoutH : p.h) !== 1080);
             checks['寸法（html）'] = { status: pages.length && !bad.length ? '合格' : '不合格', evidence: `section ${pages.length}枚` + (bad.length ? '、1920×1080でないページ：' + bad.map(p => pages.indexOf(p) + 1).join('、') : '') };
-            const longHead = pages.map((p, i) => ({ i: i + 1, h: p.heading })).filter(p => p.h && [...p.h.replace(/\s/g, '')].length > 30);
-            checks['見出し（html）'] = pages.some(p => p.heading) ? { status: longHead.length ? '不合格' : '合格', evidence: longHead.length ? '30字を超える見出し：' + longHead.map(p => `P${p.i}「${p.h}」`).join('、') : '全見出し30字以内' } : { status: '未判定', evidence: '見出しの要素を特定できません' };
+            const headingLimit = input.motion ? 36 : 30;
+            const longHead = pages.map((p, i) => ({ i: i + 1, h: p.heading })).filter(p => p.h && [...p.h.replace(/\s/g, '')].length > headingLimit);
+            checks['見出し（html）'] = pages.some(p => p.heading) ? { status: longHead.length ? '不合格' : '合格', evidence: longHead.length ? headingLimit + '字を超える見出し：' + longHead.map(p => `P${p.i}「${p.h}」`).join('、') : '全見出し' + headingLimit + '字以内' } : { status: '未判定', evidence: '見出しの要素を特定できません' };
             const small = pages.map((p, i) => ({ i: i + 1, f: p.minFont })).filter(p => p.f !== null && p.f < 18);
             checks['文字の大きさ（html）'] = { status: small.length ? '不合格' : '合格', evidence: small.length ? '18px未満の文字：' + small.map(p => `P${p.i} ${p.f}px`).join('、') : '全ページ18px以上' };
             const over = pages.map((p, i) => ({ i: i + 1, n: p.overflow })).filter(p => p.n);
@@ -268,6 +320,9 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
         } catch (error) {
             signal?.throwIfAborted();
             checks['描画（html）'] = { status: '未判定', evidence: '画像化・測定ができませんでした：' + String(error) };
+            if (input.motion) for (const name of ['寸法（html）', '見出し（html）', '文字の大きさ（html）', 'はみ出し（html）']) {
+                checks[name] = { status: '未判定', evidence: '動く版の全ページを測定できませんでした' };
+            }
         }
     }
     let rendered = (await fs.readdir(preview).catch(() => [] as string[])).filter(f => /^page-\d+\.png$/.test(f)).length;

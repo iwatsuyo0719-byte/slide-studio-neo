@@ -32,11 +32,11 @@ export function transcriptLike(material: string) {
     const text = material.replace(/https?:\/\/[^\s<>「」]+/gi, '').replace(/^添付：.*$/gm, '').replace(/^.*attachments\/.*$/gm, '');
     return /文字起こし|議事|会議|打合せ|打ち合わせ|発言|話者|さん|氏[：:]|[「」]|^\s*[^\n：:]{1,30}[：:]|\d{1,2}:\d{2}/m.test(text);
 }
-function outputRules(saved: string, formats: Input['formats']) {
+function outputRules(saved: string, formats: Input['formats'], motion = false) {
     const bullets = saved.match(/^- .*(?:\n(?!- ).*)*/gm) || [];
     if (!bullets.some(b => b.startsWith('- 静止HTML')) || !bullets.some(b => b.startsWith('- pptx'))) throw Error('出力形式の箇条がありません');
     return '## 保存する設計と成果物\n\n' + bullets.filter(b =>
-        formats.includes('html') && b.startsWith('- 静止HTML') ||
+        formats.includes('html') && !motion && b.startsWith('- 静止HTML') ||
         formats.includes('pptx') && /^- (?:pptx|本文と表・グラフを同じページに置くときの手本)/.test(b)
     ).join('\n');
 }
@@ -62,6 +62,9 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
         await whole('meeting.md');
         await whole('minutes.md');
     } else {
+        const motion = input.formats.includes('html') && input.motion === true;
+        // 動く版は設計と検査にも同じ操作規則を渡す。選択を素材中の言葉で上書きしない。
+        if (motion) await whole('interactive.md');
         const core = await read('core.md');
         const coreSection = (h: string) => add('core.md', h, section(core, h));
         add('core.md', '冒頭', section(core));
@@ -79,10 +82,8 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
             if (continuousSlides(input)) {
                 coreSection('図の共通文法');
                 coreSection('描画寸法と色');
-                add('core.md', '保存する設計と成果物（本番）', outputRules(saved, input.formats));
+                add('core.md', '保存する設計と成果物（本番）', outputRules(saved, input.formats, input.motion));
                 chunks.push('## 簡易を選んだ場合の本番規則\n\n詳細なら本番には進まず設計図で止めます。簡易なら同じ起動で続けて本番を制作します。型の規則は上記48型を使います。採用した根拠の型 E01〜E12 の手本は正本 prompts/evidence/<採用ID>.md を必ず読みます。アイコンを使う場合だけ正本 prompts/icons.md を読みます。');
-                const request = await fs.readFile(path.join(dir, 'request.md'), 'utf8') + '\n' + await fs.readFile(path.join(dir, 'material.md'), 'utf8');
-                if (input.formats.includes('html') && /操作可能|インタラクティブ|interactive|スライダ|クリックで|動くHTML/i.test(request)) await whole('interactive.md');
             }
         } else {
             if (stage === '本番') {
@@ -93,7 +94,7 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
                 coreSection('提出前の検査');
             }
             coreSection('描画寸法と色');
-            add('core.md', '保存する設計と成果物', outputRules(saved, input.formats));
+            add('core.md', '保存する設計と成果物', outputRules(saved, input.formats, input.motion));
             if (stage !== '検査') {
                 const design = await fs.readFile(path.join(dir, 'design.md'), 'utf8');
                 const types = section(core, '48型の用途と構図');
@@ -103,12 +104,15 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
                 if (lines.length) add('core.md', '48型の用途と構図', '## 48型の用途と構図\n\n' + lines.join('\n'));
                 if (stage === '本番') {
                     for (const id of evidenceNumbers(design)) await whole('evidence/' + id + '.md');
-                    const request = await fs.readFile(path.join(dir, 'request.md'), 'utf8') + '\n' + await fs.readFile(path.join(dir, 'material.md'), 'utf8');
-                    if (input.formats.includes('html') && /操作可能|インタラクティブ|interactive|スライダ|クリックで|動くHTML/i.test(request)) await whole('interactive.md');
                     if (/アイコン|icon/i.test(design)) await whole('icons.md');
                 }
             }
         }
+    }
+    if (!isMinutes(input) && input.formats.includes('html')) {
+        chunks.push(input.motion
+            ? '## HTML版の指定\n\nHTMLは動く版です。HTMLの配置・操作・拡大縮小・見出しの上限36字はinteractive.mdを優先します。成果物の保存名はindex.htmlです。ツールが各ページを測れるよう、各ページは section[data-page] とし、一覧・詳細パネルは section 以外（aside や role="dialog"）で作ります。pptxも指定されている時はpptxの規則を維持します。'
+            : '## HTML版の指定\n\nHTMLは静止版です。素材中に操作・クリック・動くHTMLなどの語句があっても動く版には変更しません。');
     }
     const name = 'rules-' + stage + '.md';
     await atomicText(path.join(dir, name), chunks.join('\n\n') + '\n');

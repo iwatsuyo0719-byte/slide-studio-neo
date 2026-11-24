@@ -25,6 +25,7 @@ export interface Input {
     audience: '社内' | '社外';
     purpose: Purpose;
     formats: Format[];
+    motion?: boolean;
     level: Level;
     palette: string;
     brand: string;
@@ -116,13 +117,15 @@ export function validateInput(raw: unknown, s: Settings): Input {
     const i = raw as Input;
     if (!i || typeof i.title !== 'string' || typeof i.material !== 'string' || (!isMinutes(i) && (typeof i.brand !== 'string' || typeof i.palette !== 'string')) || !['社内', '社外'].includes(i.audience) || !Object.hasOwn(purposes, i.purpose) || (!isMinutes(i) && !['簡易', '詳細', 'AUTO'].includes(i.level)) || !Array.isArray(i.formats) || !i.formats.length || i.formats.some(f => !['pptx', 'html'].includes(f)) || !i.ai || !['claude', 'codex'].includes(i.ai.provider))
         throw Error('入力の形式が正しくありません');
+    if (i.motion !== undefined && typeof i.motion !== 'boolean')
+        throw Error('動きの指定はbooleanにしてください');
     if (!allowedModels(s, i.ai.provider).includes(i.ai.model) || (i.ai.depth !== 'auto' && !allowedDepths(s, i.ai.provider).includes(i.ai.depth)))
         throw Error('AIの品質の下限を満たしていません');
     if (i.material.length > 500000)
         throw Error('貼り付けは50万文字までです。長い素材はファイルを添付してください');
     if (!isMinutes(i) && i.palette === 'brand' && !/^#[0-9a-f]{6}$/i.test(i.brand))
         throw Error('ブランド色は # と6桁のHEXで入力してください');
-    return { ...i, ...(isMinutes(i) ? { palette: '', brand: '', level: '詳細' as const } : {}), title: i.title.slice(0, 120), material: i.material.slice(0, 500000), formats: [...new Set(i.formats)] };
+    return { ...i, motion: !isMinutes(i) && i.formats.includes('html') && i.motion === true, ...(isMinutes(i) ? { palette: '', brand: '', level: '詳細' as const } : {}), title: i.title.slice(0, 120), material: i.material.slice(0, 500000), formats: [...new Set(i.formats)] };
 }
 export function isMinutes(input: Pick<Input, 'purpose'>) { return input.purpose === '議事録'; }
 export function parsePalettes(md: string): Palette[] {
@@ -146,10 +149,10 @@ export function parsePalettes(md: string): Palette[] {
         throw Error('配色100組・4系統を確認できません');
     return out;
 }
-export function requestText(i: Input, palettes: Palette[], files: string[] = []) { const p = palettes.find(p => p.id === i.palette); return ['何を：' + (i.title || (isMinutes(i) ? '素材から会議名を決めて議事録を作る' : '素材から題名を決めてスライドを作る')), '読み手：' + i.audience + (i.audience === '社外' ? '。敬体とし、出所を厳密に確かめる' : ''), '目的：' + i.purpose + '。' + purposes[i.purpose].goal + '。骨組み：' + purposes[i.purpose].structure + '。素材中の指定を優先する', '素材：material.md' + (files.length ? '、attachments/ の ' + files.join('、') : ''), isMinutes(i) ? '出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る' : '出力：' + i.formats.join(' ＋ '), '版：' + (isMinutes(i) ? '詳細・止まらず完成まで（固定）' : i.level) + (!isMinutes(i) && i.level === 'AUTO' ? '。読み手・種類・素材量からAIが簡易または詳細を選び、理由を1行示す' : ''), '配色：' + (isMinutes(i) ? '使わない（議事録）' : i.palette === 'auto' ? 'おまかせ。詳細は近い3組と比較HTMLを提示、簡易は1組を決定' : i.palette === 'brand' ? 'ブランド色 ' + i.brand : p ? p.id + ' ' + p.name + ' ' + p.colors.join(' ') : '026 浅瀬アクア')].join('\n') + '\n'; }
+export function requestText(i: Input, palettes: Palette[], files: string[] = []) { const p = palettes.find(p => p.id === i.palette); return ['何を：' + (i.title || (isMinutes(i) ? '素材から会議名を決めて議事録を作る' : '素材から題名を決めてスライドを作る')), '読み手：' + i.audience + (i.audience === '社外' ? '。敬体とし、出所を厳密に確かめる' : ''), '目的：' + i.purpose + '。' + purposes[i.purpose].goal + '。骨組み：' + purposes[i.purpose].structure + '。素材中の指定を優先する', '素材：material.md' + (files.length ? '、attachments/ の ' + files.join('、') : ''), isMinutes(i) ? '出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る' : '出力：' + i.formats.map(f => f === 'html' ? 'html（' + (i.motion ? '動く版' : '静止版') + '）' : f).join(' ＋ '), '版：' + (isMinutes(i) ? '詳細・止まらず完成まで（固定）' : i.level) + (!isMinutes(i) && i.level === 'AUTO' ? '。読み手・種類・素材量からAIが簡易または詳細を選び、理由を1行示す' : ''), '配色：' + (isMinutes(i) ? '使わない（議事録）' : i.palette === 'auto' ? 'おまかせ。詳細は近い3組と比較HTMLを提示、簡易は1組を決定' : i.palette === 'brand' ? 'ブランド色 ' + i.brand : p ? p.id + ' ' + p.name + ' ' + p.colors.join(' ') : '026 浅瀬アクア')].join('\n') + '\n'; }
 export const secretKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
 export function subscriptionEnv(env: Record<string, string | undefined>) { return Object.fromEntries(Object.entries(env).filter(([k]) => !secretKeys.includes(k.toUpperCase()))) as NodeJS.ProcessEnv; }
-export function historyKey(i: Input, level: Level, s: Settings = defaults) { if (isMinutes(i)) level = '詳細'; const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+'), ...(!isMinutes(i) && level !== '詳細' ? ['continuous-slides-v1'] : [])].join('|'); }
+export function historyKey(i: Input, level: Level, s: Settings = defaults) { if (isMinutes(i)) level = '詳細'; const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+'), ...(!isMinutes(i) && i.formats.includes('html') && i.motion ? ['motion-v1'] : []), ...(!isMinutes(i) && level !== '詳細' ? ['continuous-slides-v1'] : [])].join('|'); }
 export function estimate(i: Input, level: Level, phase: 'design' | 'production', history: HistorySample[] = [], s: Settings = defaults): [
     number,
     number
@@ -204,7 +207,7 @@ export function rangeText(r: [
 
 // Normalize only the reusable form input; historical records keep their original purpose.
 export function historyInput(input: Input): Input {
-    return { ...input, purpose: Object.hasOwn(purposes, input.purpose) ? input.purpose : '議事録' };
+    return { ...input, motion: input.formats.includes('html') && input.motion === true, purpose: Object.hasOwn(purposes, input.purpose) ? input.purpose : '議事録' };
 }
 export function requestTitle(input: Input, files: { name: string }[] = []): string {
     const fallback = isMinutes(input) ? '議事録' : 'スライド';

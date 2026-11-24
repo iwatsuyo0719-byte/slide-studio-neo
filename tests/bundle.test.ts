@@ -62,7 +62,7 @@ test('本番html：選択型の補足行、E08のみ。操作とアイコンは�
     assert.doesNotMatch(text, /出典：evidence\/E01.md|出典：evidence.md|出典：icons.md|出典：interactive.md|^- pptxを要求|^- 08 |## 依頼の受け取り|出典：references/m);
     await fs.writeFile(path.join(f.dir, 'request.md'), '操作可能なHTMLを求める');
     await fs.appendFile(path.join(f.dir, 'design.md'), '\n主体のアイコンを配置');
-    const interactive = await f.get('本番');
+    const interactive = await f.get('本番', { motion: true });
     assert.match(interactive, /出典：interactive.md/); assert.match(interactive, /出典：icons.md/);
 });
 test('本番pptx：入れ子の規則と手本を保持しHTML規則を除く', async t => {

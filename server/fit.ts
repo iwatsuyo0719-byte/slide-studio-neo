@@ -33,7 +33,8 @@ export function addFit(html: string): string {
     return end ? html.slice(0, end.index) + FIT + html.slice(end.index) : html + FIT;
 }
 
-export async function fitHtmlFile(dir: string): Promise<void> {
+export async function fitHtmlFile(dir: string, motion = false): Promise<void> {
+    if (motion) return;
     const file = path.join(dir, 'index.html');
     let html: string;
     try { html = await fs.readFile(file, 'utf8'); }
