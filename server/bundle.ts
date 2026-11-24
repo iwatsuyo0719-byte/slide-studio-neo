@@ -3,7 +3,7 @@ import path from 'node:path';
 import { isMinutes, type Input, type Stage } from '../lib/domain';
 import { atomicText } from './store';
 
-export const compactDesign = '簡易版・AUTOの design.md は、本番で使う見出しの縦読み・ページごとの型と配置・数字台帳（値・期間・出所）・注・残る質問だけを記録します。数字台帳の値・出所の列は減らしません。検算は行ってよいが結果だけを残し、計算式や検算の過程は書きません。';
+export const compactDesign = '全版の design.md は、本番で使う見出しの縦読み・ページごとの型と配置と強調・月ごと等の元数字の表・数字台帳（値・期間・出所）・注・残る質問を記録します。数字台帳の値・出所の列は減らしません。素材の読み取り・集計と検算・構成の検討は省きません。検算は結果（一致した／しなかった）だけを残し、計算式や検算の過程は書きません。ツール操作の記録も書きません。この記載範囲は設計図の本文に適用し、本番に必要な注や計算条件は省きません。';
 export const continuousSlides = (input: Input) => !isMinutes(input) && input.level !== '詳細';
 
 // A parent section includes its ### children. Never silently omit missing rules.
@@ -27,7 +27,10 @@ export function evidenceNumbers(design: string) {
     return [...new Set([...design.matchAll(/(?<![A-Za-z0-9])E(?:0[1-9]|1[0-2])(?![A-Za-z0-9])/g)].map(m => m[0]))];
 }
 export function transcriptLike(material: string) {
-    return /文字起こし|議事|会議|打合せ|打ち合わせ|発言|話者|さん|氏[：:]|[「」]|^\s*[^\n：:]{1,30}[：:]|\d{1,2}:\d{2}/m.test(material);
+    // URLのスキーム（https:）やURL内の語句を発言・話者と誤認しない。
+    // ツールが付ける「添付：」の行と添付ファイル名の行も話者と見ない。
+    const text = material.replace(/https?:\/\/[^\s<>「」]+/gi, '').replace(/^添付：.*$/gm, '').replace(/^.*attachments\/.*$/gm, '');
+    return /文字起こし|議事|会議|打合せ|打ち合わせ|発言|話者|さん|氏[：:]|[「」]|^\s*[^\n：:]{1,30}[：:]|\d{1,2}:\d{2}/m.test(text);
 }
 function outputRules(saved: string, formats: Input['formats']) {
     const bullets = saved.match(/^- .*(?:\n(?!- ).*)*/gm) || [];
@@ -72,8 +75,8 @@ export async function bundleRules({ root, dir, input, stage }: BundleOptions) {
             await whole('evidence.md');
             if (transcriptLike(await fs.readFile(path.join(dir, 'material.md'), 'utf8'))) await whole('meeting.md');
             if (input.palette === 'auto') add('references/palettes/PALETTES_100.md', '配色表', await fs.readFile(path.join(root, 'references/palettes/PALETTES_100.md'), 'utf8'));
+            chunks.push('## 設計図の記載範囲\n\n' + compactDesign);
             if (continuousSlides(input)) {
-                chunks.push('## 簡易版・AUTOの設計図\n\n' + compactDesign);
                 coreSection('図の共通文法');
                 coreSection('描画寸法と色');
                 add('core.md', '保存する設計と成果物（本番）', outputRules(saved, input.formats));
@@ -119,5 +122,5 @@ export async function prepareRules(options: BundleOptions, log: (line: string) =
     }
 }
 export function bundledInstruction(name: string, prompts: string) {
-    return '規則は ' + name + ' にまとめてあります。制作規則はこれだけを読みます。正本 ' + prompts + '/ を開くのは、rulesに書かれた手本（examples/*.pptx など）や明示された追加規則を開く時だけです。prompts/ は読み取り専用です。';
+    return '規則は ' + name + ' にまとめてあります。制作規則はこれだけを読みます。rules ファイルは最初に全文を読みます（長ければ分けて読んでよい）。読み終えた箇所は読み直しません。正本 ' + prompts + '/ を開くのは、rulesに書かれた手本（examples/*.pptx など）や明示された追加規則を開く時だけです。prompts/ は読み取り専用です。';
 }
