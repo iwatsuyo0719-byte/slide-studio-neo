@@ -10,8 +10,11 @@ sh.CurrentDirectory = dir
 cmdFile = """" & dir & "\start-neo.cmd"""
 
 If sh.Run("cmd /c node scripts\launcher.mjs running", 0, True) = 0 Then
-  sh.Run "cmd /c node scripts\launcher.mjs open", 0, False
-  WScript.Quit 0
+  ' A newer version (pulled or rebuilt) stops the old hidden server first; otherwise just open the browser.
+  If sh.Run("cmd /c node scripts\launcher.mjs stop-if-stale", 0, True) <> 0 Then
+    sh.Run "cmd /c node scripts\launcher.mjs open", 0, False
+    WScript.Quit 0
+  End If
 End If
 
 need = Not fso.FolderExists(dir & "\node_modules")

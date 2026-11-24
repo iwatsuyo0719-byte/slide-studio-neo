@@ -1,5 +1,6 @@
 // start-neo.cmd から呼ぶ小さな補助（依存なしのNode.js）。
 //   running      … NEO（またはそのポートのサーバー）が応答すれば 0、無ければ 2
+//   stop-if-stale … 裏のNEOが古い版なら止めて 0、そのまま使うなら 2（Windowsのみ）
 //   needs-build  … ビルドが無い・ソースより古ければ 1、そのまま起動できれば 0
 //   open         … サーバーが応答したらブラウザで開く（最大3分待つ）
 //   say <key>    … 黒い窓に出す日本語の案内（cmd の UTF-8 の扱いで崩れないよう Node で出す）
@@ -61,6 +62,23 @@ if (mode === 'say') {
     process.exit(0);
 }
 if (mode === 'running') process.exit(await listening() ? 0 : 2);
+// 裏で動いているNEOが古い版なら止める（止めたら0、そのまま使うなら2）。
+// 古い＝ソースがビルドより新しい、またはサーバーの起動がビルドより前。このrepoの next start 以外は触らない。
+if (mode === 'stop-if-stale') {
+    if (process.platform !== 'win32') process.exit(2);
+    const ps = `$c = Get-NetTCPConnection -LocalPort ${Number(port)} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)"; @{ id = $p.ProcessId; cmd = $p.CommandLine; started = ([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() } | ConvertTo-Json -Compress }`;
+    const { execFileSync } = await import('node:child_process');
+    let info;
+    try { info = JSON.parse(execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8', windowsHide: true }).trim() || 'null'); } catch { process.exit(2); }
+    const cmd = String(info?.cmd || '').toLowerCase().replaceAll('/', '\\');
+    if (!info || !cmd.includes(root.toLowerCase()) || !/next.*\bstart\b/.test(cmd)) process.exit(2);
+    let built = 0;
+    try { built = fs.statSync(path.join(root, '.next', 'BUILD_ID')).mtimeMs; } catch { /* ビルド無し＝古い */ }
+    if (!needsBuild() && info.started >= built) process.exit(2);
+    try { execFileSync('taskkill', ['/PID', String(info.id), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { process.exit(2); }
+    for (let n = 0; n < 20 && await listening(); n++) await new Promise(r => setTimeout(r, 500));
+    process.exit(await listening() ? 2 : 0);
+}
 if (mode === 'needs-build') process.exit(needsBuild() ? 1 : 0);
 if (mode === 'open') {
     for (let n = 0; n < 180; n++) {
