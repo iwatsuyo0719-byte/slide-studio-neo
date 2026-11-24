@@ -250,9 +250,8 @@ export default function Studio() {
                     if (drawer === 'settings') {
                         const s = await post({ action: 'settings', settings: settingsDraft });
                         setBoot(b => b ? { ...b, settings: s } : b);
-                        if (!active)
-                            patch({ ai: { provider: s.provider, model: s.model, depth: s.depth } });
-                        setNotice('設定を保存しました');
+                        patch({ ai: { provider: s.provider, model: s.model, depth: s.depth } });
+                        setNotice(active ? '設定を保存しました。表示中の依頼は作った時のAIのまま、次の依頼から使います' : '設定を保存しました');
                     }
                     else
                         patch({ ai: { provider: settingsDraft.provider, model: settingsDraft.model, depth: settingsDraft.depth } });
