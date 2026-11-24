@@ -106,7 +106,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('詳細');
         await evaluate("document.querySelector('[data-palette=auto]').click()");
         await click('作成する');
-        await wait("document.querySelector('.progress-card')");
+        await wait("document.querySelector('.work-chat')");
         assert.equal(await evaluate("document.querySelector('fieldset').disabled"), true);
         await wait("document.querySelector('.design-drawer')");
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
@@ -130,7 +130,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.ok(await evaluate("document.querySelector('iframe[title=成果物プレビュー]')?.getAttribute('sandbox')==='allow-scripts'"));
         assert.equal(await evaluate("document.documentElement.dataset.previewMissing || ''"), '', '完了の初回描画からsandbox付きプレビューがある');
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
+        assert.ok(await evaluate("document.querySelector('.work-chat').textContent.includes('Claude Codeレビュー')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'done-1280.png'), Buffer.from(resultShot.data, 'base64'));
         // Add image pages through a browser-only fixture; no CLI generation or server files.
@@ -177,7 +177,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 });
         await wait("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')");
         await evaluate("(()=>{const el=document.querySelector('.preview-dialog input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'ページ1を直す');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus()})()");
-        await wait("document.querySelector('.right-column .feedback-row input').value==='ページ1を直す'");
+        await wait("document.querySelector('.work-chat-compose textarea').value==='ページ1を直す'");
         await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 });
         assert.ok(await evaluate("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')"), '入力中の矢印はページを送らない');
         for (let n = 0; n < 8; n++) {
@@ -199,8 +199,8 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
             }
             return window.__previewFetch(...args);
         };document.querySelector('.preview-dialog .feedback-row button').click()`);
-        await wait("!document.querySelector('.preview-dialog') && document.querySelector('.feedback-row input').disabled");
-        assert.equal(await evaluate("window.__previewRevision.feedback"), 'ページ1を直す');
+        await wait("!document.querySelector('.preview-dialog') && document.querySelector('.work-chat-compose textarea').disabled");
+        assert.equal(await evaluate("window.__previewRevision.feedback"), '［表示中：ページ1］\nページ1を直す');
         await evaluate("document.querySelector('.preview-open').focus();document.querySelector('.preview-open').click()");
         await wait("document.querySelector('.preview-dialog')?.open");
         assert.equal(await evaluate("document.querySelector('.preview-dialog input').disabled && document.querySelector('.preview-dialog .feedback-row button').disabled"), true);
@@ -247,7 +247,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate("window.__minutesWaits"), 0);
         await evaluate("window.__minutesObserver.disconnect()");
         assert.equal(await evaluate("!!document.querySelector('.design-drawer,.edge-tab')"), false);
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
+        assert.ok(await evaluate("document.querySelector('.work-chat').textContent.includes('Claude Codeレビュー')"));
         await evaluate("document.querySelector('.minutes-ledger summary').click()");
         assert.ok(await evaluate("document.querySelector('.minutes-ledger pre').textContent.includes('種別')"));
         assert.ok(await evaluate("document.querySelector('.minutes-document table')?.textContent.includes('担当')"));
@@ -265,19 +265,19 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
             assert.match(pdf.headers.get('content-disposition')!, /attachment/);
             assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0,4).toString(), '%PDF');
         } else assert.ok(await evaluate("document.querySelector('.pdf-note')?.textContent.includes('PDFは作れませんでした')"));
-        assert.ok(await evaluate("document.querySelector('.minutes-document').getBoundingClientRect().bottom <= document.querySelector('.feedback-row').getBoundingClientRect().top"), '本文がAI直し欄に重ならない');
+        assert.ok(await evaluate("(()=>{const a=document.querySelector('.minutes-document').getBoundingClientRect(),b=document.querySelector('.work-chat-compose').getBoundingClientRect();return a.right<=b.left||a.bottom<=b.top})()"), '本文がAI直し欄に重ならない');
         const minutesShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'minutes-done-1280.png'), Buffer.from(minutesShot.data, 'base64'));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         await click('編集');
         await wait("document.querySelector('[aria-label=議事録のMarkdown]')");
-        assert.ok(await evaluate("document.querySelector('.minutes-editor').getBoundingClientRect().bottom <= document.querySelector('.feedback-row').getBoundingClientRect().top"), '編集欄と保存ボタンがAI直し欄に重ならない');
+        assert.ok(await evaluate("(()=>{const a=document.querySelector('.minutes-editor').getBoundingClientRect(),b=document.querySelector('.work-chat-compose').getBoundingClientRect();return a.right<=b.left||a.bottom<=b.top})()"), '編集欄と保存ボタンがAI直し欄に重ならない');
         const editShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'minutes-edit-1280.png'), Buffer.from(editShot.data, 'base64'));
         const beforeEdit = await evaluate("document.querySelector('.minutes-source').value");
         await evaluate("(()=>{const el=document.querySelector('.minutes-source');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,el.value+'\\n手動保存の動作確認。\\n');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await wait("document.querySelector('.minutes-toolbar').textContent.includes('未保存')");
-        await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
+        await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await wait("document.querySelector('#minutes-save-first')?.textContent.includes('先に保存してください')");
         assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='直しを送る').disabled"), true);
         await click('直しを送る');
@@ -296,7 +296,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await evaluate("window.fetch=window.__originalFetch");
         await wait("!document.querySelector('#minutes-save-first') && ![...document.querySelectorAll('button')].find(b=>b.textContent==='直しを送る').disabled");
         assert.match(await fetch(markdownURL).then(r=>r.text()), /手動保存の動作確認/);
-        await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
+        await evaluate("(()=>{const el=document.querySelector('[aria-label=完了後の直し指示]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'決定事項を確認');el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         await click('直しを送る');
         await wait("document.querySelector('.minutes-document')?.textContent.includes('手動保存の動作確認') && document.querySelector('[aria-label=完了後の直し指示]')?.placeholder==='1周の直しを実施済みです'");
         await click('編集');
@@ -307,7 +307,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await click('新しく作る');
         await click('社内');
         await material('週次会議 [long]');
-        await evaluate("window.__invalidMinutesMeter=false;window.__shorteningObserved=false;window.__lengthObserver=new MutationObserver(()=>{const bar=document.querySelector('[role=progressbar]');if(bar && Number(bar.getAttribute('aria-valuenow'))>=100)window.__invalidMinutesMeter=true;if(document.querySelector('.logs')?.textContent.includes('分量の自動短縮（1回）')){window.__shorteningObserved=true;if(!document.querySelector('.stages .current')?.textContent.includes('PDF'))window.__invalidMinutesMeter=true;}});window.__lengthObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-valuenow']})");
+        await evaluate("window.__invalidMinutesMeter=false;window.__shorteningObserved=false;window.__lengthObserver=new MutationObserver(()=>{if(document.querySelector('.result-top'))return;const bar=document.querySelector('[role=progressbar]');if(bar && Number(bar.getAttribute('aria-valuenow'))>=100)window.__invalidMinutesMeter=true;if(document.querySelector('.logs')?.textContent.includes('分量の自動短縮（1回）')){window.__shorteningObserved=true;if(!document.querySelector('.stages .current')?.textContent.includes('PDF'))window.__invalidMinutesMeter=true;}});window.__lengthObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-valuenow']})");
         // Return a real in-progress response at the shortening boundary, even if it lasts less than the 600ms UI polling interval.
         await evaluate("window.__lengthFetch=window.fetch;window.__shorteningCaptured=false;window.fetch=async(...args)=>{if(String(args[0]).startsWith('/api/neo?id=') && !window.__shorteningCaptured){for(let n=0;n<400;n++){const response=await window.__lengthFetch(...args);const state=await response.clone().json();if(state.minutesShortened || state.status==='done' || state.status==='error'){window.__shorteningCaptured=true;return response;}await new Promise(r=>setTimeout(r,10));}}return window.__lengthFetch(...args)}");
         await click('作成する');
@@ -318,7 +318,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate('window.__shorteningObserved'), true);
         assert.equal(await evaluate("(()=>{const r=document.querySelector('.pdf-page-note').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight && r.right<=innerWidth})()"), true, '枚数はスクロールせず読める');
         await evaluate('window.__lengthObserver.disconnect()');
-        assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('機械検査で不合格')"));
+        assert.ok(await evaluate("document.querySelector('.work-chat').textContent.includes('機械検査で不合格')"));
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
         const lengthShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'minutes-long-review-error-1280.png'), Buffer.from(lengthShot.data, 'base64'));
