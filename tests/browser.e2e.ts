@@ -181,10 +181,10 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 });
         assert.ok(await evaluate("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')"), '入力中の矢印はページを送らない');
         for (let n = 0; n < 8; n++) {
-            await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab' });
+            await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
             assert.equal(await evaluate("document.querySelector('.preview-dialog').contains(document.activeElement)"), true, 'Tabのフォーカスは拡大表示内');
         }
-        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape' });
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
         await wait("!document.querySelector('.preview-dialog')");
         assert.equal(await evaluate("document.activeElement===document.querySelector('.preview-expand')"), true);
         assert.equal(await evaluate("document.body.style.overflow"), '');
@@ -340,7 +340,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.equal(await evaluate("getComputedStyle(document.querySelector('.palette-popup')).animationName"), 'none');
         await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
         await wait("document.activeElement?.getAttribute('data-palette') !== 'auto' && document.querySelector('.palette-popup-colors')");
-        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape' });
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
         await wait("!document.querySelector('.palette-popup')");
         await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
         assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);

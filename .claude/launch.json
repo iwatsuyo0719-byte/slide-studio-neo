@@ -4,14 +4,29 @@
     {
       "name": "neo-fake",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set NEO_FAKE_AI=1&& npm run dev -- --port 3100"],
+      "runtimeArgs": [
+        "/c",
+        "set NEO_FAKE_AI=1&& npm run dev -- --port 3100"
+      ],
       "port": 3100
     },
     {
       "name": "neo-app",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "npx next start --hostname 127.0.0.1 --port 3101"],
+      "runtimeArgs": [
+        "/c",
+        "npx next start --hostname 127.0.0.1 --port 3101"
+      ],
       "port": 3101
+    },
+    {
+      "name": "neo-fake-e2e",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set NEO_FAKE_AI=1&& set NEO_WORKSPACE=work\\e2e-workspace&& npm run dev -- --port 3210"
+      ],
+      "port": 3210
     }
   ]
 }
