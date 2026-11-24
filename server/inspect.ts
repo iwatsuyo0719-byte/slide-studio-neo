@@ -116,16 +116,21 @@ const HTML_PROBE = `(() => {
   return JSON.stringify(pages);
 })()`;
 
-async function inspectHTML(dir: string, motion: boolean, signal?: AbortSignal, onChild?: (c: ChildProcess) => void) {
+async function inspectHTML(dir: string, motion: boolean, signal?: AbortSignal, onChild?: (c: ChildProcess) => void, errors: string[] = []) {
     return withBrowser(async send => {
         await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await send('Page.enable');
+        // 開いた時のJSエラー（書き間違いで全体が動かない等）を拾う。ツールが送る操作より前の分だけを見る
+        await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__neoErrors=[];addEventListener("error",e=>{window.__neoErrors.push(String(e.message||e.error||"error"))},true);addEventListener("unhandledrejection",e=>{window.__neoErrors.push("Promise: "+String(e.reason))});' });
         await send('Page.navigate', { url: pathToFileURL(path.join(dir, 'index.html')).href + (motion ? '#static' : '') });
         for (let n = 0; n < 60; n++) {
             const ready = await send('Runtime.evaluate', { expression: 'document.readyState === "complete" && (!document.fonts || document.fonts.status === "loaded")', returnByValue: true });
             if (ready.result.value) break;
             await new Promise(r => setTimeout(r, 250));
         }
+        await new Promise(r => setTimeout(r, 300));
+        const loadErrors = await send('Runtime.evaluate', { expression: 'JSON.stringify(window.__neoErrors||[])', returnByValue: true });
+        errors.push(...JSON.parse(loadErrors.result.value || '[]') as string[]);
         const measure = async () => JSON.parse((await send('Runtime.evaluate', { expression: HTML_PROBE, returnByValue: true })).result.value) as { x: number; y: number; w: number; h: number; layoutW: number; layoutH: number; heading: string | null; headingLines: number; minFont: number | null; overflow: number; texts: string[]; colors: string[] }[];
         const preview = path.join(dir, 'preview');
         await fs.mkdir(preview, { recursive: true });
@@ -306,7 +311,11 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
             ? { status: '合格', evidence: 'ツールの画面サイズ調整の目印あり' }
             : { status: '不合格', evidence: 'ツールの画面サイズ調整の目印なし' };
         try {
-            const pages = await inspectHTML(dir, input.motion === true, signal, onChild);
+            const errors: string[] = [];
+            const pages = await inspectHTML(dir, input.motion === true, signal, onChild, errors);
+            checks['スクリプトのエラー（html）'] = errors.length
+                ? { status: '不合格', evidence: '開いた時にJSのエラー（図や操作が動かない恐れ）：' + [...new Set(errors)].slice(0, 3).join('／') }
+                : { status: '合格', evidence: '開いた時のJSエラーなし' };
             const bad = pages.filter(p => Math.round(input.motion ? p.layoutW : p.w) !== 1920 || Math.round(input.motion ? p.layoutH : p.h) !== 1080);
             checks['寸法（html）'] = { status: pages.length && !bad.length ? '合格' : '不合格', evidence: `section ${pages.length}枚` + (bad.length ? '、1920×1080でないページ：' + bad.map(p => pages.indexOf(p) + 1).join('、') : '') };
             const headingLimit = input.motion ? 36 : 30;
