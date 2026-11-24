@@ -78,6 +78,8 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         const click = async (text: string) => evaluate("(()=>{" + label + "const b=[...document.querySelectorAll('button')].find(b=>label(b)===" + JSON.stringify(text) + ");if(!b)throw Error('button missing: '+" + JSON.stringify(text) + ");b.click();})()");
         const material = async (value: string) => evaluate("(()=>{const el=document.querySelector('#material');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el," + JSON.stringify(value) + ");el.dispatchEvent(new Event('input',{bubbles:true}));})()");
         console.log('Navigating to app');
+        // 開発サーバーは初回表示のコンパイルに10秒以上かかることがあるので、先に1回読み込ませておく
+        for (const route of ['/', '/api/neo', '/api/neo?history=1', '/api/motion']) await fetch(base + route, { signal: AbortSignal.timeout(120000) }).catch(() => undefined);
         await send('Page.navigate', { url: base });
         await wait("document.querySelector('.status-line')?.textContent.includes('偽AI')");
         assert.equal(await evaluate('document.documentElement.scrollHeight <= innerHeight'), true);
@@ -131,6 +133,83 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         assert.ok(await evaluate("document.querySelector('.results-text').textContent.includes('Claude Codeレビュー')"));
         const resultShot = await send('Page.captureScreenshot', { format: 'png' });
         await fs.writeFile(path.join(shots, 'done-1280.png'), Buffer.from(resultShot.data, 'base64'));
+        // Add image pages through a browser-only fixture; no CLI generation or server files.
+        await evaluate(`window.__previewFetch=window.fetch;window.fetch=async(...args)=>{
+            const response=await window.__previewFetch(...args);
+            if(String(args[0])==='/api/neo?history=1'){
+                const records=await response.json();
+                records[0]={...records[0],files:['index.html','preview/page-01.png','preview/page-02.png','preview/page-03.png'],revisionUsed:false};
+                window.__previewRecord=records[0];
+                return Response.json(records);
+            }
+            return response;
+        }`);
+        const previewImages = async (event: MessageEvent) => {
+            const message = JSON.parse(String(event.data));
+            if (message.method === 'Fetch.requestPaused') {
+                await send('Fetch.fulfillRequest', { requestId: message.params.requestId, responseCode: 200,
+                    responseHeaders: [{ name: 'Content-Type', value: 'image/png' }],
+                    body: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aFzQAAAAASUVORK5CYII=' });
+            }
+        };
+        ws.addEventListener('message', previewImages);
+        await send('Fetch.enable', { patterns: [{ urlPattern: '*preview/page-*.png*' }] });
+        await click('履歴');
+        await wait("document.querySelector('.history-list button')");
+        await evaluate("document.querySelector('.history-list button').click()");
+        await wait("document.querySelectorAll('.thumbnails button').length===4");
+        assert.deepEqual(await evaluate("[...document.querySelectorAll('.thumbnails button')].map(b=>b.textContent)"), ['HTML', 'ページ 1', 'ページ 2', 'ページ 3']);
+        await evaluate("document.querySelector('.preview-expand').focus();document.querySelector('.preview-expand').click()");
+        await wait("document.querySelector('.preview-dialog')?.open");
+        assert.equal(await evaluate("document.body.style.overflow"), 'hidden');
+        assert.equal(await evaluate("document.querySelector('.preview-dialog').getAttribute('aria-modal')"), 'true');
+        for (const [width, height] of [[1280, 720], [1920, 1080]]) {
+            await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+            await wait("(()=>{const r=document.querySelector('.preview-dialog-frame').getBoundingClientRect();return r.width>500 && Math.abs(r.width/r.height-16/9)<.01})()");
+            assert.equal(await evaluate("(()=>{const d=document.querySelector('.preview-dialog'),r=d.getBoundingClientRect(),f=d.querySelector('.feedback-row').getBoundingClientRect();return d.scrollHeight<=d.clientHeight && r.top===0 && r.bottom<=innerHeight && f.bottom<=innerHeight})()"), true);
+        }
+        await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+        await wait("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')");
+        assert.ok(await evaluate("document.querySelector('.preview-dialog img').src.includes('page-01.png')"));
+        await evaluate("document.querySelector('[aria-label=次のページ]').click()");
+        await wait("document.querySelector('.preview-dialog-navigation > span').textContent.includes('3 / 4')");
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 });
+        await wait("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')");
+        await evaluate("(()=>{const el=document.querySelector('.preview-dialog input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'ページ1を直す');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus()})()");
+        await wait("document.querySelector('.right-column .feedback-row input').value==='ページ1を直す'");
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 });
+        assert.ok(await evaluate("document.querySelector('.preview-dialog-navigation > span').textContent.includes('2 / 4')"), '入力中の矢印はページを送らない');
+        for (let n = 0; n < 8; n++) {
+            await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab' });
+            assert.equal(await evaluate("document.querySelector('.preview-dialog').contains(document.activeElement)"), true, 'Tabのフォーカスは拡大表示内');
+        }
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape' });
+        await wait("!document.querySelector('.preview-dialog')");
+        assert.equal(await evaluate("document.activeElement===document.querySelector('.preview-expand')"), true);
+        assert.equal(await evaluate("document.body.style.overflow"), '');
+        await evaluate("document.querySelector('.preview-open').focus();document.querySelector('.preview-open').click()");
+        await wait("document.querySelector('.preview-dialog')?.open");
+        assert.equal(await evaluate("document.querySelector('.preview-dialog input').value"), 'ページ1を直す');
+        // Capture the revision request locally and return the used-up state.
+        await evaluate(`window.fetch=async(...args)=>{
+            if(args[1]?.body && JSON.parse(args[1].body).action==='revise'){
+                window.__previewRevision=JSON.parse(args[1].body);
+                return Response.json({...window.__previewRecord,revisionUsed:true});
+            }
+            return window.__previewFetch(...args);
+        };document.querySelector('.preview-dialog .feedback-row button').click()`);
+        await wait("!document.querySelector('.preview-dialog') && document.querySelector('.feedback-row input').disabled");
+        assert.equal(await evaluate("window.__previewRevision.feedback"), 'ページ1を直す');
+        await evaluate("document.querySelector('.preview-open').focus();document.querySelector('.preview-open').click()");
+        await wait("document.querySelector('.preview-dialog')?.open");
+        assert.equal(await evaluate("document.querySelector('.preview-dialog input').disabled && document.querySelector('.preview-dialog .feedback-row button').disabled"), true);
+        await evaluate("document.querySelector('[aria-label=拡大プレビューを閉じる]').click()");
+        await wait("!document.querySelector('.preview-dialog')");
+        assert.equal(await evaluate("document.activeElement===document.querySelector('.preview-open')"), true);
+        await evaluate("window.fetch=window.__previewFetch");
+        await send('Fetch.disable');
+        ws.removeEventListener('message', previewImages);
         await click('履歴');
         await wait("document.querySelector('.history-list button')");
         assert.ok(await evaluate("document.querySelector('.history-list').textContent.includes('完了')"));
@@ -259,7 +338,7 @@ test('1280×720のTOPから偽AI生成、設計図、完了、履歴、設定ま
         await evaluate("document.querySelector('[data-palette=auto]').focus()");
         await wait("document.querySelector('.palette-popup')");
         assert.equal(await evaluate("getComputedStyle(document.querySelector('.palette-popup')).animationName"), 'none');
-        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight' });
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
         await wait("document.activeElement?.getAttribute('data-palette') !== 'auto' && document.querySelector('.palette-popup-colors')");
         await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape' });
         await wait("!document.querySelector('.palette-popup')");
