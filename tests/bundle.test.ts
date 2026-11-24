@@ -30,7 +30,7 @@ test('型番号・E番号は別々に抽出し重複、範囲外、日付、小�
     assert.deepEqual(evidenceNumbers('E01 E12 E01 E13 E001 AE03 E031'), ['E01', 'E12']);
 });
 test('設計図：設計節とevidence入口、会話とauto配色だけ条件追加', async t => {
-    const f = await fixture(t), text = await f.get('設計図');
+    const f = await fixture(t), text = await f.get('設計図', { level: '詳細' });
     for (const h of ['冒頭', '版と保存先', '依頼の受け取り', '主張を先に定める', '資料全体の筋道', '表現を選ぶ順序', '48型の用途と構図', '型が不要な単純図', '保存する設計と成果物']) assert.ok(text.includes('出典：core.md「' + h + '」'), h);
     assert.match(text, /出典：evidence.md/);
     assert.doesNotMatch(text, /出典：(?:meeting|interactive|icons).md|出典：evidence\/|出典：references|^- 静止HTML|^- pptxを要求|## 描画寸法と色/m);
@@ -38,6 +38,21 @@ test('設計図：設計節とevidence入口、会話とauto配色だけ条件�
     const auto = await f.get('設計図', { palette: 'auto' });
     assert.match(auto, /出典：meeting.md/);
     assert.match(auto, /出典：references\/palettes\/PALETTES_100.md/);
+});
+test('簡易・AUTOの設計図には本番規則と短い設計図の指示を含める', async t => {
+    const f = await fixture(t);
+    for (const level of ['簡易', 'AUTO'] as const) {
+        await fs.rm(path.join(f.dir, 'design.md'), { force: true });
+        const text = await f.get('設計図', { level, formats: ['html', 'pptx'] });
+        for (const h of ['図の共通文法', '描画寸法と色']) assert.match(text, new RegExp('## ' + h));
+        assert.match(text, /- 静止HTML/);
+        assert.match(text, /- pptx/);
+        assert.match(text, /数字台帳（値・期間・出所）/);
+        assert.match(text, /値・出所の列は減らしません/);
+        assert.match(text, /計算式や検算の過程は書きません/);
+        assert.match(text, /prompts\/evidence\/<採用ID>.md/);
+        assert.match(text, /詳細なら本番には進まず設計図で止め/);
+    }
 });
 test('本番html：選択型の補足行、E08のみ。操作とアイコンは指定時だけ', async t => {
     const f = await fixture(t), text = await f.get('本番');

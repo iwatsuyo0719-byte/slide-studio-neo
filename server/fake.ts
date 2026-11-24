@@ -99,6 +99,7 @@ export async function fakeStage(r: RecordData, dir: string, stage: Stage, signal
             if (selected === '詳細')
                 await put('palette-comparison.html', '<!doctype html><html lang="ja"><meta charset="utf-8"><title>配色比較</title><body><h1>偽AIの配色比較</h1><p>026 浅瀬アクア ／ 001 桜ミルク ／ 079 真夜中の金</p></body></html>');
         }
+        if (selected === '簡易') await fakeStage(r, dir, '本番', signal);
     }
     else if (isMinutes(r.input)) {
         if (stage === '作る' && !shorten) {

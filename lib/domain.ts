@@ -31,7 +31,7 @@ export interface Input {
     material: string;
     ai: AIChoice;
 }
-export type Stage = '作る' | 'PDF' | '保存' | '設計図' | '本番' | '検査' | 'レビュー' | '手直し';
+export type Stage = '作る' | 'PDF' | '保存' | '設計図' | '設計図・本番' | '本番' | '検査' | 'レビュー' | '手直し';
 export type Status = 'running' | 'question' | 'design' | 'done' | 'error' | 'stopped';
 export interface Question {
     text: string;
@@ -149,12 +149,14 @@ export function parsePalettes(md: string): Palette[] {
 export function requestText(i: Input, palettes: Palette[], files: string[] = []) { const p = palettes.find(p => p.id === i.palette); return ['何を：' + (i.title || (isMinutes(i) ? '素材から会議名を決めて議事録を作る' : '素材から題名を決めてスライドを作る')), '読み手：' + i.audience + (i.audience === '社外' ? '。敬体とし、出所を厳密に確かめる' : ''), '目的：' + i.purpose + '。' + purposes[i.purpose].goal + '。骨組み：' + purposes[i.purpose].structure + '。素材中の指定を優先する', '素材：material.md' + (files.length ? '、attachments/ の ' + files.join('、') : ''), isMinutes(i) ? '出力：議事録 minutes.md（Markdown正本）。PDFはツールが作る' : '出力：' + i.formats.join(' ＋ '), '版：' + (isMinutes(i) ? '詳細・止まらず完成まで（固定）' : i.level) + (!isMinutes(i) && i.level === 'AUTO' ? '。読み手・種類・素材量からAIが簡易または詳細を選び、理由を1行示す' : ''), '配色：' + (isMinutes(i) ? '使わない（議事録）' : i.palette === 'auto' ? 'おまかせ。詳細は近い3組と比較HTMLを提示、簡易は1組を決定' : i.palette === 'brand' ? 'ブランド色 ' + i.brand : p ? p.id + ' ' + p.name + ' ' + p.colors.join(' ') : '026 浅瀬アクア')].join('\n') + '\n'; }
 export const secretKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
 export function subscriptionEnv(env: Record<string, string | undefined>) { return Object.fromEntries(Object.entries(env).filter(([k]) => !secretKeys.includes(k.toUpperCase()))) as NodeJS.ProcessEnv; }
-export function historyKey(i: Input, level: Level, s: Settings = defaults) { if (isMinutes(i)) level = '詳細'; const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+')].join('|'); }
+export function historyKey(i: Input, level: Level, s: Settings = defaults) { if (isMinutes(i)) level = '詳細'; const a = effectiveAI(i.ai, level, s); return [a.provider, a.model, a.depth, level, isMinutes(i) ? 'minutes' : [...i.formats].sort().join('+'), ...(!isMinutes(i) && level !== '詳細' ? ['continuous-slides-v1'] : [])].join('|'); }
 export function estimate(i: Input, level: Level, phase: 'design' | 'production', history: HistorySample[] = [], s: Settings = defaults): [
     number,
     number
 ] {
     if (isMinutes(i)) return [5 * 60000, 10 * 60000];
+    // 簡易版はどちらの表示段階でも設計図から完成までの実績を使う。
+    if (level === '簡易') phase = 'production';
     const samples = history.filter(h => h.key === historyKey(i, level, s) && h.phase === phase).map(h => h.ms).sort((a, b) => a - b);
     if (samples.length >= 3) {
         const mid = Math.floor(samples.length / 2);
@@ -181,10 +183,12 @@ export function progress(r: RecordData, now: number, range: [
     if (r.status === 'design')
         return { percent: 99, remaining: 0, overtime: false };
     const continuousMinutes = r.input && isMinutes(r.input);
-    const stages: Stage[] = continuousMinutes ? minutesStages(r.input) : r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
-    // 設計図は別メーター。本番:検査は実測16:10、詳細のレビュー8分・手直し8分は推定。
-    const weights = continuousMinutes ? (r.input.audience === '社内' ? [.95, .05] : [.60, .35, .05]) : r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
-    const index = Math.max(0, stages.indexOf(r.stage));
+    const continuousSlides = r.input && !continuousMinutes && !r.revisionUsed && r.input.level !== '詳細' && r.selectedLevel !== '詳細';
+    const stages: Stage[] = continuousMinutes ? minutesStages(r.input) : continuousSlides ? ['保存', '設計図', '検査'] : r.phase === 'design' ? ['保存', '設計図'] : r.selectedLevel === '詳細' ? ['本番', '検査', 'レビュー', '手直し'] : ['本番', '検査'];
+    // 連続版は設計図と本番を1段階にまとめる。詳細の設計図は別メーター。
+    const weights = continuousMinutes ? (r.input.audience === '社内' ? [.95, .05] : [.60, .35, .05]) : continuousSlides ? [.02, .85, .13] : r.phase === 'design' ? [.05, .95] : r.selectedLevel === '詳細' ? [16 / 42, 10 / 42, 8 / 42, 8 / 42] : [16 / 26, 10 / 26];
+    const meterStage = continuousSlides && (r.stage === '本番' || r.stage === '設計図・本番') ? '設計図' : r.stage;
+    const index = Math.max(0, stages.indexOf(meterStage));
     const base = weights.slice(0, index).reduce((a, b) => a + b, 0);
     const elapsed = Math.max(0, (r.status === 'running' ? now : r.updated) - r.stageStart);
     const part = Math.min(.96, elapsed / (range[1] * weights[index]));
