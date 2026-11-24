@@ -71,6 +71,8 @@ export default function WorkChat({ record, now, meter, range, elapsed, feedback,
     // Offset times from midnight so requests spanning midnight retain their order.
     const startSeconds = new Date(record.created).getHours() * 3600 + new Date(record.created).getMinutes() * 60 + new Date(record.created).getSeconds();
     const order = (time: string) => { const p = time.split(':').map(Number); const s = p[0] * 3600 + p[1] * 60 + (p[2] || 0); return (s - startSeconds + 86400) % 86400; };
+    // 時刻順に並べる（同じ時刻は元の順を保つ）
+    entries.sort((a, b) => order(a.time) - order(b.time));
     const signature = entries.map(e => e.id + e.text + e.operations.join('')).join('\n');
     useEffect(() => { follow.current = true; }, [record.id]);
     useEffect(() => {
@@ -88,7 +90,7 @@ export default function WorkChat({ record, now, meter, range, elapsed, feedback,
             <p className="progress-note">{done ? '完了 · 直しは1周まで使えます' : record.status === 'design' ? (minutes ? '台帳' : '設計図') + '完了・あなたの確認待ち' : record.status === 'question' ? '回答を選んでください' : record.status === 'running' ? 'いまの段階：' + stageLabel(record.stage) : record.error || '停止中'}</p>
             {meter.overtime && <p className="error-text">目安より長くかかっています</p>}
         </div>
-        <div className="work-chat-log results-text" ref={logRef} onScroll={() => { const el = logRef.current!; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
+        <div className="work-chat-log results-text" tabIndex={0} ref={logRef} onScroll={() => { const el = logRef.current!; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
             {entries.length ? entries.map(entry => <article key={entry.id} className={'work-chat-message' + (entry.speaker === 'あなた' ? ' user-message' : '')}>
                 <span className={'work-chat-avatar' + (entry.speaker === 'AI' ? ' ai' : '')} aria-hidden="true">{entry.speaker === 'AI' ? 'AI' : entry.speaker === 'NEO' ? 'NEO' : <span className="icon material-symbols-outlined">{entry.speaker === 'あなた' ? 'person' : 'fact_check'}</span>}</span>
                 <div className="work-chat-content"><header><strong>{entry.speaker}{entry.speaker === 'AI' ? ' · ' + (entry.provider === 'claude' || (!entry.provider && record.input.ai.provider === 'claude') ? 'Claude' : 'Codex') : ''}</strong><time>{entry.time || clock(record.created)}</time></header>

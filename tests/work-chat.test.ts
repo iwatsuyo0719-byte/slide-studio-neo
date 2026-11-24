@@ -64,3 +64,10 @@ test('an unlabeled retained tail does not guess the AI provider', () => {
     assert.equal(result.messages[0].text, '3ページを作りました。');
     assert.equal(result.messages[0].provider, undefined);
 });
+
+test('時刻付きの短いNEO行は、AI出力に同じ語があっても消えない', async () => {
+    const { parseWorkChat } = await import('../lib/work-chat');
+    const logs = ['[10:00:00] いまの段階：設計図', 'codex\n作業しています。完了しました\n', '[10:05:00] 完了しました'];
+    const parsed = parseWorkChat(logs);
+    assert.ok(parsed.messages.some(m => m.speaker === 'NEO' && m.text.includes('完了しました') && m.time === '10:05:00'));
+});

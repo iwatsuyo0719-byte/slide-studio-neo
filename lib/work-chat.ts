@@ -23,10 +23,18 @@ function mergeSnapshot(previous: string, next: string): string {
     if (!previous) return next;
     if (next.includes(previous)) return next;
     if (previous.includes(next)) return previous;
-    for (let length = Math.min(previous.length, next.length); length > 0; length--) {
-        if (previous.endsWith(next.slice(0, length))) return previous + next.slice(length);
+    const at = overlapAt(previous, next);
+    return at >= 0 ? previous.slice(0, at) + next : previous + '\n' + next;
+}
+
+/** previous の末尾と next の先頭が重なる位置（最長の重なり）。next の先頭16字が現れる位置だけを調べ、1字ずつ縮める総当たりをしない。 */
+function overlapAt(previous: string, next: string, minimum = 16): number {
+    if (next.length < minimum) return -1;
+    const probe = next.slice(0, minimum);
+    for (let i = previous.indexOf(probe, Math.max(0, previous.length - next.length)); i >= 0; i = previous.indexOf(probe, i + 1)) {
+        if (next.startsWith(previous.slice(i))) return i;
     }
-    return previous + '\n' + next;
+    return -1;
 }
 
 /** Interpret the existing human-readable CLI log without changing its protocol. */
@@ -96,11 +104,9 @@ export function parseWorkChat(logs: readonly string[]): WorkChatLog {
         const body = stamp ? entry.slice(stamp[0].length) : entry;
         if (!body.trim()) continue;
         // The timestamped final CLI copy still belongs to the same output stream.
-        const overlaps = stream && (body.includes(stream) || stream.includes(body) || (() => {
-            for (let n = Math.min(stream.length, body.length); n >= 16; n--) if (stream.endsWith(body.slice(0, n))) return true;
-            return false;
-        })());
-        if (!stamp || cliMarker.test(body) || overlaps) {
+        // 時刻付きの短いNEO行（「完了しました」等）は、AIの出力に同じ文字列があっても吸収しない
+        const overlaps = () => !!stream && body.length >= 200 && (body.includes(stream) || stream.includes(body) || overlapAt(stream, body) >= 0);
+        if (!stamp || cliMarker.test(body) || overlaps()) {
             if (!stream) streamTime = stamp?.[1] || time;
             stream = mergeSnapshot(stream, body);
             continue;
