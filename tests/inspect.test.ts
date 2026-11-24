@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { commonChecks, inspectSlides } from '../server/inspect';
 import { findBrowser } from '../server/pdf';
+import { addFit } from '../server/fit';
 
 const palette = { id: '026', name: '浅瀬アクア', mood: '', group: '', colors: ['#F0FDFF', '#C1EFF1', '#74D3D8', '#32A5B1', '#225966'] };
 
@@ -29,6 +30,8 @@ test('機械検査（html）：寸法・見出し30字・文字18px・はみ出�
 <section><h1>件数は1,200件に増えたため受付を見直す</h1><p>本文</p></section>
 <section><h1>これは三十字を大きく超える長すぎる見出しなので機械検査では不合格になるはずです</h1><p style="font-size:14px">小さい文字</p><p style="position:absolute;left:1900px;top:10px;white-space:nowrap">はみ出し</p></section>`);
         const r = await inspectSlides(dir, { formats: ['html'] } as any, palette);
+        assert.equal(r.checks['画面に合わせる処理（html）'].status, '不合格');
+        assert.ok(r.failed.includes('画面に合わせる処理（html）'));
         if (!await findBrowser()) { assert.equal(r.checks['描画（html）'].status, '未判定'); return; }
         assert.equal(r.checks['寸法（html）'].status, '合格');
         assert.equal(r.checks['見出し（html）'].status, '不合格');
@@ -37,4 +40,20 @@ test('機械検査（html）：寸法・見出し30字・文字18px・はみ出�
         assert.equal(r.rendered, 2);
         assert.match(await fs.readFile(path.join(dir, 'check-auto.md'), 'utf8'), /機械検査の結果/);
     } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('機械検査（html）：目印があれば画面サイズ調整に合格する（ブラウザ無しでも判定）', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'neo-inspect-fit-test-'));
+    const previous = process.env.NEO_BROWSER;
+    process.env.NEO_BROWSER = 'none';
+    try {
+        await fs.writeFile(path.join(dir, 'index.html'), addFit('<body><section>本文</section></body>'));
+        const result = await inspectSlides(dir, { formats: ['html'] } as any, palette);
+        assert.equal(result.checks['画面に合わせる処理（html）'].status, '合格');
+        assert.ok(!result.failed.includes('画面に合わせる処理（html）'));
+        assert.equal(result.checks['描画（html）'].status, '未判定');
+    } finally {
+        if (previous === undefined) delete process.env.NEO_BROWSER; else process.env.NEO_BROWSER = previous;
+        await fs.rm(dir, { recursive: true, force: true });
+    }
 });

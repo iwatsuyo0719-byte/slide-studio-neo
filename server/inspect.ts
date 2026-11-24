@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { findBrowser } from './pdf';
 import { locate, execute, terminate } from './cli';
 import { atomicText } from './store';
+import { FIT_MARKER } from './fit';
 import type { Input, Palette } from '../lib/domain';
 
 export type Status = '合格' | '不合格' | '未判定';
@@ -249,6 +250,10 @@ export async function inspectSlides(dir: string, input: Input, palette: Palette 
     // 画像はツールが作り直すので、以前の画像（AIが作ったものを含む）は消す
     for (const old of await fs.readdir(preview).catch(() => [] as string[])) if (/\.(png|jpe?g|pdf)$/i.test(old)) await fs.rm(path.join(preview, old), { force: true });
     if (input.formats.includes('html') && await fs.stat(path.join(dir, 'index.html')).catch(() => null)) {
+        const html = await fs.readFile(path.join(dir, 'index.html'), 'utf8').catch(() => '');
+        checks['画面に合わせる処理（html）'] = html.includes(FIT_MARKER)
+            ? { status: '合格', evidence: 'ツールの画面サイズ調整の目印あり' }
+            : { status: '不合格', evidence: 'ツールの画面サイズ調整の目印なし' };
         try {
             const pages = await inspectHTML(dir, signal, onChild);
             const bad = pages.filter(p => Math.round(p.w) !== 1920 || Math.round(p.h) !== 1080);

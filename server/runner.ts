@@ -10,6 +10,7 @@ import { prepareRules, bundledInstruction } from './bundle';
 import { createMinutesPDF, countPDFPages } from './pdf';
 import { inspectSlides } from './inspect';
 import { checkMinutesFiles } from './minutes-check';
+import { fitHtmlFile } from './fit';
 type Job = {
     controller: AbortController;
     child?: ChildProcess;
@@ -205,6 +206,10 @@ async function minutesPDF(r: RecordData, job?: Job) {
     }
 }
 async function slideAutoCheck(r: RecordData, job: Job) {
+    if (r.input.formats.includes('html')) {
+        try { await fitHtmlFile(requestDir(r.id)); }
+        catch (error) { await log(r, 'HTMLの画面サイズ調整を適用できませんでした：' + String(error)); }
+    }
     // P1：描画と測れば決まる検査はツールが行う。失敗しても生成は止めない
     const started = Date.now();
     // 偽AIの成果物はダミーなので、描画・計測はしない（テストを重くしない）
