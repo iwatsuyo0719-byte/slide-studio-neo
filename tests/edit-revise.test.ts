@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { applyTextEdits, escapeText, validateEdits } from '../server/text-edit';
+import { applyTextEdits, editableTexts, escapeText, validateEdits } from '../server/text-edit';
 import { injectPreviewTools } from '../server/preview-tools';
 import { create, act, current } from '../server/runner';
 import { requestDir, save } from '../server/store';
@@ -47,6 +47,15 @@ test('文字の一意性・エスケープ・同時編集を元ソースで判�
     assert.equal(escapeText('&<>"\''), '&amp;&lt;&gt;&quot;&#39;');
     assert.throws(() => validateEdits([{ before: 'x', after: 'a'.repeat(2001) }]));
     assert.throws(() => validateEdits([]));
+});
+test('文字を直す：保存して書き換えられる文字（まとまり全体・ちょうど1回）だけを一覧にし、script内で途切れない', () => {
+    const html = '<html><head><title>表紙</title></head><body><h1>表紙</h1><p>重複</p><p>重複</p><p>A &amp; B</p><script>const s="JSだけ";</script><p>&lt;/script&gt;</p></body></html>';
+    const list = editableTexts(html);
+    assert.ok(list.includes('表紙') && list.includes('A & B') && list.includes('</script>'));
+    assert.ok(!list.includes('重複') && !list.includes('JSだけ'));
+    const out = injectPreviewTools(html, new URL('http://localhost/?preview=1&edit=1'));
+    assert.equal(out.match(/<\/script>/gi)!.length, 2, '差し込んだ一覧の中の </script> で途切れない');
+    assert.ok(injectPreviewTools(html, new URL('http://localhost/?preview=1&pick=1')).includes('("pick",[])'));
 });
 test('補助スクリプトはpreview=1かつpick/edit=1だけに付く', () => {
     const source = '<html><body><h1>見出し</h1></body></html>';

@@ -19,6 +19,17 @@ function decodeText(text: string) {
         return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : raw;
     });
 }
+// 保存して書き換えられる文字（表示テキストのまとまり全体が、ソース中にちょうど1回）。
+// プレビューの「文字を直す」で、直せる所にだけ印を付けるために使う。
+export function editableTexts(source: string): string[] {
+    const counts = new Map<string, number>();
+    const tokens = /<!--[\s\S]*?-->|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<(?:[^>\"']|\"[^\"]*\"|'[^']*')*>|([^<]+)/gi;
+    for (const token of source.matchAll(tokens)) {
+        const text = token[2] ? decodeText(token[2]).trim() : '';
+        if (text && text.length <= 2000) counts.set(text, (counts.get(text) || 0) + 1);
+    }
+    return [...counts].filter(([, n]) => n === 1).map(([t]) => t);
+}
 export function applyTextEdits(source: string, edits: TextEdit[]) {
     // Plan against the original source so one edit cannot change another edit's target.
     const spans: { start: number; end: number; text: string }[] = [];

@@ -1,8 +1,36 @@
+import { editableTexts } from './text-edit';
 // A literal avoids compiler helper references in code sent to a sandboxed frame.
-const previewTools = String.raw`(function(mode) {
+const previewTools = String.raw`(function(mode, editable) {
     let active = null;
     let before = '';
     const elements = () => [...document.querySelectorAll('body *')].filter(el => !el.children.length && !el.closest('script,style,svg,canvas,textarea,input,select'));
+    // 選べる・直せる所に印を付ける（点線。カーソルを合わせると濃い枠と色）。印の無い所は押しても何も起きない
+    const pickSelector = 'h1,h2,h3,h4,h5,h6,p,li,th,td,figcaption,blockquote,[data-claim],svg,img,canvas';
+    const editableSet = new Set(editable || []);
+    const canEdit = el => el instanceof HTMLElement && elements().includes(el) && editableSet.has((el.textContent || '').trim());
+    const pickTarget = el => {
+        const hit = el.closest(pickSelector);
+        if (hit) return hit.closest('svg') || hit;
+        // 見出し・段落の要素でなくても、文字だけを持つ要素（div・span）は選べる
+        return el instanceof HTMLElement && !el.children.length && (el.textContent || '').trim() && !el.closest('script,style') ? el : null;
+    };
+    const style = document.createElement('style');
+    style.textContent = '.neo-spot{outline:2px dashed rgba(34,89,102,.55)!important;outline-offset:2px;cursor:pointer!important}' +
+        '.neo-spot:hover{outline:3px solid #225966!important;background-color:rgba(116,211,216,.22)!important}' +
+        'body.neo-picking *:not(.neo-spot),body.neo-editing *:not(.neo-spot){cursor:default}';
+    document.head.appendChild(style);
+    document.body.classList.add(mode === 'pick' ? 'neo-picking' : 'neo-editing');
+    const mark = () => {
+        for (const el of document.querySelectorAll('body *')) {
+            if (el.closest('script,style') || el === document.body) continue;
+            const on = mode === 'pick' ? pickTarget(el) === el : canEdit(el);
+            if (on !== el.classList.contains('neo-spot')) el.classList.toggle('neo-spot', on);
+        }
+    };
+    mark();
+    // 動く版はJSで図を描き直すので、変化したら印を付け直す
+    let timer = 0;
+    new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(mark, 150); }).observe(document.body, { childList: true, subtree: true, characterData: true });
     const pageOf = (el) => {
         const section = el.closest('section[data-page],section');
         return (section?.getAttribute('data-page') || String(section ? [...document.querySelectorAll('section')].indexOf(section) + 1 : 1)).slice(0, 40);
@@ -15,6 +43,8 @@ const previewTools = String.raw`(function(mode) {
         el.removeAttribute('contenteditable');
         el.style.outline = '';
         if (after !== before) {
+            // 書き換えたばかりの文字も、続けて直せるように印を残す（保存時は元の文字からまとめて置き換える）
+            if (after.length <= 2000) editableSet.add(after.trim());
             if (after.length <= 2000) parent.postMessage({ type: 'neo-edit', before, after, page: pageOf(el), index: elements().indexOf(el) }, '*');
             else el.textContent = before;
         }
@@ -28,13 +58,16 @@ const previewTools = String.raw`(function(mode) {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
         if (mode === 'pick') {
-            const section = target.closest('section');
-            const kind = target.closest('h1,h2,h3,h4,h5,h6') ? '見出し' : target.closest('table') ? '表' : target.closest('svg,img,canvas,figure') ? '図' : '本文';
-            const text = (target.textContent || target.getAttribute('alt') || '').trim().replace(/\s+/g, ' ').slice(0, 40);
-            parent.postMessage({ type: 'neo-pick', page: pageOf(section || target), kind, text }, '*');
+            const spot = pickTarget(target);
+            if (!spot) return;
+            const section = spot.closest('section');
+            const kind = spot.closest('h1,h2,h3,h4,h5,h6') ? '見出し' : spot.closest('table') ? '表' : spot.closest('svg,img,canvas,figure') ? '図' : '本文';
+            const text = (spot.textContent || spot.getAttribute('alt') || spot.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+            parent.postMessage({ type: 'neo-pick', page: pageOf(section || spot), kind, text }, '*');
             return;
         }
-        if (!(target instanceof HTMLElement) || target.children.length || !elements().includes(target) || !(target.textContent || '').trim() || (target.textContent || '').length > 2000) return;
+        // 直せる印（保存すると書き換えられる文字）の付いた所だけ編集できる
+        if (!canEdit(target) || (target.textContent || '').length > 2000) return;
         if (active === target) return;
         commit();
         active = target; before = target.textContent || '';
@@ -62,6 +95,9 @@ export function injectPreviewTools(html: string, url: URL) {
     if (url.searchParams.get('preview') !== '1') return html;
     const mode = url.searchParams.get('edit') === '1' ? 'edit' : url.searchParams.get('pick') === '1' ? 'pick' : null;
     if (!mode) return html;
-    const script = '<script data-neo-preview-tools>(' + previewTools + ')(' + JSON.stringify(mode) + ');</script>';
+    // 文字を直す時は、保存して書き換えられる文字の一覧を渡し、その文字にだけ印を付ける。
+    // script の中に置くので、< を < にして </script> で途切れないようにする
+    const editable = mode === 'edit' ? editableTexts(html) : [];
+    const script = '<script data-neo-preview-tools>(' + previewTools + ')(' + JSON.stringify(mode) + ',' + JSON.stringify(editable).replace(/</g, '\\u003c') + ');</script>';
     return /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, script + '$&') : html + script;
 }

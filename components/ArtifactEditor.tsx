@@ -91,7 +91,7 @@ export default function ArtifactEditor({ src, html, page, pending, children, onP
             {html ? <button aria-pressed={mode === 'edit'} disabled={locked || edits.length > 0} onClick={() => { setMode(mode === 'edit' ? null : 'edit'); setMessage(''); }}>文字を直す</button> : <span className="hint">文字はPowerPointで開いて直してください</span>}
             {mode === 'edit' && <><button disabled={locked} onClick={() => void save()}>文字の変更を保存</button><button disabled={locked} onClick={() => { changed([]); setReload(value => value + 1); setMode(null); setMessage('変更を取り消しました'); }}>取り消し</button><span className="hint">未保存 {edits.length}件 · AI不使用</span></>}
         </div>
-        {mode && <p className="hint">{mode === 'pick' ? '直したい場所を押すと、AIへの指示欄に場所が入ります。複数選べます。' : '文字を押して書き換え、Enterで確定します。最後に保存してください（各2,000字まで）。'}</p>}
+        {mode && <p className="hint">{mode === 'pick' ? '点線で囲まれた所が選べます。押すとAIへの指示欄に場所が入るので、その下にどう直したいかを書いて「直しを送る」を押してください。複数選べます。' : '点線で囲まれた文字だけ直せます（グラフの数値などJSが描いた文字や、同じ文字が何か所もある所は直せないので「場所を選ぶ」でAIに頼んでください）。押して書き換え、Enterで確定し、最後に「文字の変更を保存」を押してください。'}</p>}
         {mode ? <div className="artifact-edit-stage"><div className="artifact-edit-frame" ref={frame} aria-busy={saving}>
             {html ? <iframe ref={iframe} key={src + mode + reload} title="直す場所のプレビュー" sandbox="allow-scripts" src={src + '&' + mode + '=1&v=' + reload} style={{ transform: 'scale(' + scale + ')' }}/>
                 : <img alt={page + '・直す場所を選ぶ'} src={src} onClick={imagePick}/>}
